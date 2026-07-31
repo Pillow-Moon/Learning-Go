@@ -12,7 +12,7 @@ REM   - backend/.venv/ 已创建（运行过一次 pip install -r requirements.t
 REM   - KataGo二进制 + 模型已下载到 backend/katago/
 REM ============================================================
 
-cd /d "%~dp0..\backend"
+cd /d "%~dp0..\..\backend"
 
 echo ========================================
 echo   围棋AI教学平台 - 本地GPU引擎
