@@ -5,8 +5,9 @@ import { useState } from 'react'
 
 import { useGameStore } from '../stores/gameStore'
 import { useAnalysisStore } from '../stores/analysisStore'
+import { useSettingsStore } from '../stores/settingsStore'
+import { getCurrentEngine } from '../engines/manager'
 import type { BoardSize, GameMode, Player } from '../lib/types'
-import type { MoveDto } from '../services/api'
 
 const SIZES: BoardSize[] = [9, 13, 19]
 
@@ -39,6 +40,9 @@ export default function GameControls() {
   } = useGameStore()
 
   const { analyzing, error: analysisError, analyze, clear } = useAnalysisStore()
+  const { engineSource, benchmarkScore } = useSettingsStore()
+  const engine = getCurrentEngine()
+  const engineInfo = engine.getInfo()
 
   // 对局设置表单（点击「开始新对局」生效）
   const [size, setSize] = useState<BoardSize>(boardSize)
@@ -56,11 +60,11 @@ export default function GameControls() {
   }
 
   const handleAnalyze = () => {
-    const moveDtos: MoveDto[] = moves.map((m) => ({
+    const engineMoves: { color: string; vertex: [number, number] | null }[] = moves.map((m) => ({
       color: m.color === 1 ? 'B' : 'W',
       vertex: m.vertex,
     }))
-    void analyze({ moves: moveDtos, boardSize, komi, maxVisits: visits })
+    void analyze({ moves: engineMoves, boardSize, komi, maxVisits: visits })
   }
 
   return (
@@ -84,6 +88,19 @@ export default function GameControls() {
             ⚠ {aiError}（点击关闭）
           </p>
         )}
+        {/* 引擎状态指示 */}
+        <div className="engine-status">
+          <span
+            className="engine-dot"
+            style={{ background: engineInfo.ready ? '#4caf50' : '#e53935' }}
+            title={engineInfo.ready ? '引擎就绪' : '引擎未就绪'}
+          />
+          <span className="hint">
+            {engineSource === 'local' ? '本地引擎' : 'WASM'}
+            {engineInfo.ready ? ' ✓' : ' ✗ 未连接'}
+            {benchmarkScore > 0 && ` · ${benchmarkScore} v/s`}
+          </span>
+        </div>
       </div>
 
       {/* 信息区 */}

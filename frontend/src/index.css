@@ -177,6 +177,20 @@ a {
   display: inline-block;
 }
 
+.engine-status {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-top: 4px;
+}
+
+.engine-dot {
+  display: inline-block;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+}
+
 .result {
   font-size: 18px;
   font-weight: 700;
