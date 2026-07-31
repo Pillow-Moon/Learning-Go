@@ -96,7 +96,7 @@ export default function SettingsPage() {
             className="select"
           >
             <option value="local">Local GPU（本地后端）</option>
-            <option value="browser">Browser WASM（需编译产物）</option>
+            <option value="browser">Browser WASM（首次需下载模型 ~38MB）</option>
           </select>
         </div>
         <div className="settings-row">
@@ -115,6 +115,19 @@ export default function SettingsPage() {
         </div>
         {benchmarkScore > 0 && (
           <p className="hint">设备基准：{benchmarkScore} visits/s</p>
+        )}
+        {engineSource === 'local' && (
+          <div className="hint" style={{ marginTop: 8 }}>
+            未运行后端？下载{' '}
+            <a
+              href={`${import.meta.env.BASE_URL}setup-windows.bat`}
+              download
+              className="link"
+            >
+              Windows 一键启动器
+            </a>
+            ，双击运行即可自动克隆仓库、安装依赖、下载 KataGo 并启动服务。
+          </div>
         )}
       </section>
 

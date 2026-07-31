@@ -15,15 +15,7 @@ class Settings(BaseSettings):
     app_name: str = "Learning-Go"
     debug: bool = True
 
-    # 数据库
-    database_url: str = "sqlite:///./learning_go.db"
-
-    # DeepSeek API（阶段三）
-    deepseek_api_key: str = ""
-    deepseek_base_url: str = "https://api.deepseek.com"
-    deepseek_model: str = "deepseek-v4-flash"
-
-    # KataGo（阶段二）
+    # KataGo
     katago_binary: str = "./katago/katago.exe"
     katago_model: str = "./katago/models/b10c384h6.bin.gz"
     # GTP 与 Analysis 线程配置键互斥，必须用两个独立配置文件

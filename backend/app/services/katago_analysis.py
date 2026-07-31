@@ -82,12 +82,11 @@ class KataGoAnalysis:
         返回结构化分析结果：
             {
               "board_size": 19,
-              "moves": [...],
               "candidates": [
                  {"move": [x,y], "winrate": 0.65, "score_lead": 2.3,
                   "visits": 80, "pv": [[x,y], ...]}, ...
               ],
-              "root": {"winrate": ..., "scoreLead": ...}
+              "root": {"winrate": ..., "score_lead": ...}
             }
         """
         async with self._lock:

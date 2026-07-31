@@ -1,7 +1,7 @@
 /**
  * 课程详情页（纯前端：从 JSON 加载，逐步教学）。
  */
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { Link, useParams } from 'react-router-dom'
 
 import GoBoardCanvas from '../components/GoBoardCanvas'
@@ -9,6 +9,7 @@ import coursesData from '../data/courses.json'
 import { parseSgf, gtpToVertex } from '../lib/sgfParser'
 import { vertexToCoord } from '../lib/boardUtils'
 import type { Vertex } from '../lib/types'
+import { saveCourseProgress, getCourseProgress } from '../lib/db'
 
 interface FlatStep {
   lessonTitle: string
@@ -22,6 +23,18 @@ export default function CourseDetailPage() {
   const { id } = useParams()
   const [stepIdx, setStepIdx] = useState(0)
   const [answered, setAnswered] = useState<{ correct: boolean } | null>(null)
+
+  // 从 IndexedDB 恢复进度
+  useEffect(() => {
+    const loadProgress = async () => {
+      if (!id) return
+      const progress = await getCourseProgress(Number(id))
+      if (progress) {
+        setStepIdx(progress.lastStepIndex)
+      }
+    }
+    loadProgress()
+  }, [id])
 
   // 从 JSON 中查找课程
   const course = useMemo(() => {
@@ -55,9 +68,24 @@ export default function CourseDetailPage() {
   }
 
   const goNext = () => {
-    if (isLast) return
-    setStepIdx((i) => i + 1)
+    if (isLast) {
+      saveCourseProgress({
+        courseId: Number(id),
+        completedSteps: course.flatSteps.length,
+        totalSteps: course.flatSteps.length,
+        lastStepIndex: course.flatSteps.length - 1,
+      })
+      return
+    }
+    const newIdx = stepIdx + 1
+    setStepIdx(newIdx)
     setAnswered(null)
+    saveCourseProgress({
+      courseId: Number(id),
+      completedSteps: newIdx + 1,
+      totalSteps: course.flatSteps.length,
+      lastStepIndex: newIdx,
+    })
   }
 
   const expectedVertex =
