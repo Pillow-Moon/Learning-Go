@@ -1,98 +1,98 @@
 @echo off
-chcp 65001 > nul
+chcp 936 > nul
 REM ============================================================
-REM 围棋AI教学平台 - 本地GPU引擎一键启动器（自安装版）
+REM   Learning-Go Local GPU Engine Launcher (self-installing)
 REM
-REM 自动完成：
-REM   1. 检查 Python
-REM   2. 创建/复用虚拟环境 .venv
-REM   3. 安装 Python 依赖
-REM   4. 下载 KataGo 二进制 + 神经网络权重
-REM   5. 生成 .env 配置文件
-REM   6. 启动 FastAPI 服务（端口 8000）
+REM   Auto-completes:
+REM    1. Check Python
+REM    2. Create/reuse venv .venv
+REM    3. Install Python deps
+REM    4. Download KataGo binary + neural net weights
+REM    5. Generate .env config
+REM    6. Start FastAPI server (port 8000)
 REM
-REM 启动后浏览器访问 http://localhost:5173
-REM 前端设置中选择 "Local GPU" 引擎来源。
+REM   After startup, open http://localhost:5173
+REM   Select "Local GPU" engine in frontend Settings.
 REM ============================================================
 
 cd /d "%~dp0..\..\backend"
 set "BACKEND_DIR=%CD%"
 
 echo ========================================
-echo   围棋AI教学平台 - 本地GPU引擎
-echo   目录: %BACKEND_DIR%
+echo   WeiQi AI - Local GPU Engine
+echo   Dir: %BACKEND_DIR%
 echo ========================================
 echo.
 
-REM ===== 1. 检查 Python =====
+REM ===== 1. Check Python =====
 where python >nul 2>nul
 if errorlevel 1 (
-    echo [错误] 未检测到 Python，请先安装 Python 3.10+：
-    echo        https://www.python.org/downloads/
-    echo        安装时勾选 "Add Python to PATH"。
+    echo [ERROR] Python not found. Install Python 3.10+ from:
+    echo         https://www.python.org/downloads/
+    echo         Check "Add Python to PATH" during install.
     pause
     exit /b 1
 )
 for /f "tokens=2" %%v in ('python --version 2^>^&1') do set "PYVER=%%v"
 echo [1/6] Python %PYVER% OK
 
-REM ===== 2. 虚拟环境 =====
+REM ===== 2. Virtual env =====
 if not exist ".venv\Scripts\python.exe" (
-    echo [2/6] 创建虚拟环境 .venv ...
+    echo [2/6] Creating venv .venv ...
     python -m venv .venv
     if errorlevel 1 (
-        echo [错误] 创建虚拟环境失败
+        echo [ERROR] Failed to create venv
         pause
         exit /b 1
     )
 ) else (
-    echo [2/6] 虚拟环境已存在
+    echo [2/6] venv already exists
 )
 set "PY=.venv\Scripts\python.exe"
 set "PIP=.venv\Scripts\pip.exe"
 
-REM ===== 3. 安装依赖 =====
-echo [3/6] 安装 Python 依赖（首次较慢）...
+REM ===== 3. Install deps =====
+echo [3/6] Installing Python deps (slow first time)...
 %PIP% install -r requirements.txt -q
 if errorlevel 1 (
-    echo [错误] 依赖安装失败，请检查网络或 requirements.txt
+    echo [ERROR] Dep install failed. Check network or requirements.txt
     pause
     exit /b 1
 )
 
-REM ===== 4. 下载 KataGo =====
+REM ===== 4. Download KataGo =====
 if exist "katago\katago.exe" (
-    echo [4/6] KataGo 已就绪
+    echo [4/6] KataGo ready
 ) else (
-    echo [4/6] 下载 KataGo 二进制 + 神经网络权重...
+    echo [4/6] Downloading KataGo + weights...
     powershell -ExecutionPolicy Bypass -File scripts\download_katago.ps1
     if errorlevel 1 (
-        echo [错误] KataGo 下载失败
+        echo [ERROR] KataGo download failed
         pause
         exit /b 1
     )
 )
 
-REM ===== 5. 生成 .env =====
+REM ===== 5. Generate .env =====
 if exist ".env" (
-    echo [5/6] .env 已存在
+    echo [5/6] .env exists
 ) else (
-    echo [5/6] 从 .env.example 生成 .env ...
+    echo [5/6] Generating .env from .env.example ...
     copy .env.example .env >nul
 )
 
-REM ===== 6. 启动服务 =====
-echo [6/6] 启动 FastAPI 服务...
+REM ===== 6. Start server =====
+echo [6/6] Starting FastAPI server...
 echo.
 echo ========================================
-echo   后端:   http://localhost:8000
-echo   文档:   http://localhost:8000/docs
-echo   前端:   http://localhost:5173
-echo   停止:   Ctrl+C
+echo   Backend:  http://localhost:8000
+echo   API docs: http://localhost:8000/docs
+echo   Frontend: http://localhost:5173
+echo   Stop:     Ctrl+C
 echo ========================================
 echo.
 
-REM 4 秒后自动打开浏览器
+REM Auto-open browser after 4s
 start "" /b cmd /c "timeout /t 4 /nobreak >nul & start http://localhost:8000/docs"
 
 %PY% -m uvicorn app.main:app --host 0.0.0.0 --port 8000
