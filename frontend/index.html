@@ -7,6 +7,16 @@
     <title>围棋AI教学</title>
     <link rel="manifest" href="/manifest.json" />
     <meta name="theme-color" content="#b8860b" />
+    <!-- SPA 路由回退：GitHub Pages 404 后恢复用户原始路径 -->
+    <script>
+      (function() {
+        var r = sessionStorage.redirect;
+        delete sessionStorage.redirect;
+        if (r && r !== location.href) {
+          history.replaceState(null, null, r);
+        }
+      })();
+    </script>
   </head>
   <body>
     <div id="root"></div>
