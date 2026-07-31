@@ -45,6 +45,9 @@ function buildMessages(req: CommentaryRequest): { role: 'system' | 'user'; conte
     advanced: '业余高段棋手，可以深入讲解形势判断、大局观和复杂变化。',
   }
 
+  const playerName = req.player === 'black' ? '黑' : '白'
+  const opponentName = req.player === 'black' ? '白' : '黑'
+
   const topMoves = req.candidates
     .slice(0, 5)
     .map((c) => {
@@ -55,14 +58,16 @@ function buildMessages(req: CommentaryRequest): { role: 'system' | 'user'; conte
     .join('\n')
 
   const system = `你是一位专业的围棋教练。${levelDesc[req.level]}
-请根据以下 KataGo 分析数据，为第 ${req.move_number} 手棋（${req.player === 'black' ? '黑' : '白'}方落子${req.move ?? '虚手'}）做教学解说。
-解说要点：1）这手棋的意图与效果；2）与最佳选点的对比；3）一句话的改进建议。
+请为第 ${req.move_number} 手棋做教学解说。
+注意：这手棋是「${playerName}方刚下的 ${req.move ?? '虚手'}」，已经落在棋盘上了。
+下面提供的候选选点是 KataGo 分析当前局面后，推荐「${opponentName}方」下一步的走法，不是对这手棋的替代方案。
+解说步骤：1）简要评价${playerName}方这手棋的意图和效果；2）结合候选选点，预测${opponentName}方下一步可能怎么应对；3）给${playerName}方一句改进建议（可作为以后类似局面的参考）。
 控制在 150 字以内，语气亲切自然。`
 
   const user = `盘面：${req.board_size}路棋盘
 当前胜率：${req.root_winrate != null ? (req.root_winrate * 100).toFixed(1) + '%' : '未知'}
 目差：${req.root_score_lead != null ? req.root_score_lead.toFixed(1) + '目' : '未知'}
-KataGo 候选选点：
+KataGo 推荐「${opponentName}方」下一步候选：
 ${topMoves || '无数据'}`
 
   return [
