@@ -42,6 +42,16 @@ export default function CommentaryPanel({ onHighlight }: Props) {
       visits: c.visits,
       pv: c.pv.map((v) => vertexToCoord(v, boardSize)),
     }))
+
+    // 生成着法序列文本，让 LLM 能看到完整局面演变
+    const moveHistory = moves
+      .map((m) => {
+        const color = m.color === 1 ? 'B' : 'W'
+        const coord = m.pass ? 'pass' : m.vertex ? vertexToCoord(m.vertex, boardSize) : '?'
+        return `${m.n}.${color} ${coord}`
+      })
+      .join(' ')
+
     void request({
       move_number: moves.length,
       player: last.color === 1 ? 'black' : 'white',
@@ -51,7 +61,7 @@ export default function CommentaryPanel({ onHighlight }: Props) {
       candidates: cands,
       root_winrate: rootWinrate,
       root_score_lead: rootScoreLead,
-      recent_summary: null,
+      move_history: moveHistory,
     })
   }
 
