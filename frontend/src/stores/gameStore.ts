@@ -23,6 +23,7 @@ import type {
 import { getCurrentEngine } from '../engines/manager'
 import { recommendVisits } from '../engines/benchmark'
 import { useSettingsStore } from './settingsStore'
+import { saveGame } from '../lib/db'
 
 /** 连续 pass 两次视为终局 */
 const PASS_TO_END = 2
@@ -75,6 +76,29 @@ function trailingPasses(moves: Move[]): number {
 }
 
 export const useGameStore = create<GameState>((set, get) => {
+  /** 对局结束时自动保存到 IndexedDB */
+  const autoSave = () => {
+    const s = get()
+    if (s.status !== 'finished' || s.moves.length === 0) return
+    const record = {
+      boardSize: s.boardSize,
+      komi: s.komi,
+      mode: s.gameMode,
+      result: s.result ?? '未知',
+      sgf: '',
+      createdAt: '',
+      moves: s.moves.map((m) => ({
+        n: m.n,
+        color: m.color,
+        vertex: m.vertex,
+        pass: m.pass,
+      })),
+    }
+    saveGame(record).catch(() => {
+      // IndexedDB 保存失败静默忽略
+    })
+  }
+
   /** 内部：把一手已校验的着法推入状态（ stone 或 pass ）。 */
   const pushMove = (move: Move, newBoard: GoBoard, lastMove: Vertex | null) => {
     const { board, moves, history } = get()
@@ -89,6 +113,7 @@ export const useGameStore = create<GameState>((set, get) => {
       status: finished ? 'finished' : 'playing',
       result: finished ? '双方虚手，对局结束' : null,
     })
+    if (finished) autoSave()
   }
 
   /** 内部：若处于人机模式且轮到 AI，则触发 AI 应手。 */
@@ -172,6 +197,7 @@ export const useGameStore = create<GameState>((set, get) => {
       if (status !== 'playing' && status !== 'waiting_ai') return
       const winner = currentPlayer === 1 ? '白' : '黑'
       set({ status: 'finished', result: `${winner}中盘胜` })
+      autoSave()
     },
 
     undo: () => {
@@ -234,6 +260,7 @@ export const useGameStore = create<GameState>((set, get) => {
         if (resp.coord === 'resign') {
           const winner = s.aiColor === 1 ? '白' : '黑'
           set({ status: 'finished', result: `${winner}中盘胜（AI 认输）` })
+          autoSave()
           return
         }
         if (resp.coord === 'pass' || resp.vertex === null) {
