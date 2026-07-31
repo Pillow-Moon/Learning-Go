@@ -1,6 +1,7 @@
 /**
  * 应用根组件：路由 + 顶部导航。
  */
+import { useEffect } from 'react'
 import { Link, Route, Routes } from 'react-router-dom'
 
 import HomePage from './pages/HomePage'
@@ -9,6 +10,7 @@ import AssessmentPage from './pages/AssessmentPage'
 import CourseListPage from './pages/CourseListPage'
 import CourseDetailPage from './pages/CourseDetailPage'
 import SettingsPage from './pages/SettingsPage'
+import { initEngine } from './engines/manager'
 
 function ComingSoon({ title }: { title: string }) {
   return (
@@ -23,6 +25,11 @@ function ComingSoon({ title }: { title: string }) {
 }
 
 export default function App() {
+  // 应用加载时自动尝试连接引擎
+  useEffect(() => {
+    initEngine()
+  }, [])
+
   return (
     <div className="app">
       <header className="topbar">

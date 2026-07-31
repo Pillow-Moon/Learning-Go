@@ -1,35 +1,44 @@
 /**
- * 评估答题阶段：规则认知 / 基础技巧。
- * 渲染题目 SGF 局面，用户点击落子作答，自适应（做满 3 题且正确率 >80% 跳过剩余）。
+ * 评估答题阶段：规则认知 / 基础技巧（纯前端版）。
+ * 题目从 JSON 加载，答案本地比对。
  */
-import { useEffect, useState } from 'react'
+import { useMemo, useState } from 'react'
 
 import GoBoardCanvas from './GoBoardCanvas'
-import { getProblems, submitAnswer, type ProblemOut, type ProblemResultDto } from '../services/api'
+import problemsData from '../data/problems.json'
 import { parseSgf } from '../lib/sgfParser'
 import { vertexToCoord } from '../lib/boardUtils'
 import type { Vertex } from '../lib/types'
 
+interface ProblemResult {
+  category: string
+  tag: string
+  correct: boolean
+}
+
 interface Props {
   category: string
   title: string
-  onComplete: (results: ProblemResultDto[]) => void
+  onComplete: (results: ProblemResult[]) => void
+}
+
+interface ProblemItem {
+  id: number; category: string; tag: string; difficulty: number
+  sgf: string; correct_move: string; explanation: string
 }
 
 export default function ProblemStage({ category, title, onComplete }: Props) {
-  const [problems, setProblems] = useState<ProblemOut[]>([])
-  const [index, setIndex] = useState(0)
-  const [results, setResults] = useState<ProblemResultDto[]>([])
-  const [feedback, setFeedback] = useState<{ correct: boolean; explanation: string } | null>(null)
-  const [loading, setLoading] = useState(true)
-
-  useEffect(() => {
-    getProblems(category, 5)
-      .then((ps) => setProblems(ps))
-      .finally(() => setLoading(false))
+  const problems = useMemo<ProblemItem[]>(() => {
+    return (problemsData as ProblemItem[])
+      .filter((p) => p.category === category)
+      .sort(() => Math.random() - 0.5) // 随机打乱
+      .slice(0, 5)
   }, [category])
 
-  if (loading) return <p className="hint">加载题目中…</p>
+  const [index, setIndex] = useState(0)
+  const [results, setResults] = useState<ProblemResult[]>([])
+  const [feedback, setFeedback] = useState<{ correct: boolean; explanation: string } | null>(null)
+
   if (problems.length === 0) {
     return (
       <div>
@@ -44,22 +53,21 @@ export default function ProblemStage({ category, title, onComplete }: Props) {
   const problem = problems[index]
   const parsed = parseSgf(problem.sgf)
 
-  const handlePlay = async (vertex: Vertex) => {
+  const handlePlay = (vertex: Vertex) => {
     if (feedback) return
     const coord = vertexToCoord(vertex, parsed.boardSize)
-    const resp = await submitAnswer(problem.id, coord)
+    const correct = coord.toUpperCase() === problem.correct_move.toUpperCase()
     const newResults = [
       ...results,
-      { category: problem.category, tag: problem.tag, correct: resp.correct },
+      { category: problem.category, tag: problem.tag, correct },
     ]
     setResults(newResults)
-    setFeedback({ correct: resp.correct, explanation: resp.explanation })
+    setFeedback({ correct, explanation: problem.explanation })
   }
 
   const next = () => {
     const answered = results.length
     const correctCount = results.filter((r) => r.correct).length
-    // 自适应：做满 3 题且正确率 >80% 跳过剩余
     const shouldSkip = answered >= 3 && correctCount / answered > 0.8
     if (shouldSkip || index + 1 >= problems.length) {
       onComplete(results)

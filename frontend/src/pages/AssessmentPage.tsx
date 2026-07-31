@@ -7,29 +7,35 @@ import { Link } from 'react-router-dom'
 import ProblemStage from '../components/ProblemStage'
 import GameStage from '../components/GameStage'
 import RadarChart from '../components/RadarChart'
-import {
-  getAssessmentReport,
-  type AssessmentReport,
-  type GameOverlapDto,
-  type ProblemResultDto,
-} from '../services/api'
+import { computeReport, type AssessmentReport } from '../lib/assessment'
 
+/** 评估流程各阶段 */
 type Stage = 'intro' | 'rules' | 'techniques' | 'games' | 'report'
+
+/** 答题结果 */
+interface ProblemResult {
+  category: string
+  tag: string
+  correct: boolean
+}
+
+/** 实战重合度 */
+interface GameOverlap {
+  max_visits: number
+  overlap_rate: number
+  move_count: number
+}
 
 export default function AssessmentPage() {
   const [stage, setStage] = useState<Stage>('intro')
-  const [problemResults, setProblemResults] = useState<ProblemResultDto[]>([])
-  const [gameOverlaps, setGameOverlaps] = useState<GameOverlapDto[]>([])
+  const [problemResults, setProblemResults] = useState<ProblemResult[]>([])
+  const [gameOverlaps, setGameOverlaps] = useState<GameOverlap[]>([])
   const [report, setReport] = useState<AssessmentReport | null>(null)
-  const [loadingReport, setLoadingReport] = useState(false)
 
-  // 进入报告阶段时请求定级报告
+  // 进入报告阶段时本地计算定级报告
   useEffect(() => {
     if (stage !== 'report') return
-    setLoadingReport(true)
-    getAssessmentReport(problemResults, gameOverlaps)
-      .then(setReport)
-      .finally(() => setLoadingReport(false))
+    setReport(computeReport(problemResults, gameOverlaps))
   }, [stage, problemResults, gameOverlaps])
 
   if (stage === 'intro') {
@@ -94,7 +100,6 @@ export default function AssessmentPage() {
   return (
     <div className="assessment-page report-page">
       <h1>定级报告</h1>
-      {loadingReport && <p className="hint">生成报告中…</p>}
       {report && (
         <>
           <div className="report-level">

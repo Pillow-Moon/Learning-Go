@@ -1,18 +1,14 @@
 /**
  * 评估实战对弈阶段：3 局 9 路，难度递增（maxVisits 1/50/200）。
  * 每局统计用户落子命中 KataGo top-3 推荐的比例（重合度），不看胜负。
- * 参考分析统一用 maxVisits=100 作为「标准答案」。
+ * 使用引擎抽象层（GoEngine），不再依赖后端 API。
  */
 import { useCallback, useEffect, useRef, useState } from 'react'
 import GoBoard from '@sabaki/go-board'
 
 import GoBoardCanvas from './GoBoardCanvas'
-import {
-  analyzePosition,
-  requestAiMove,
-  type GameOverlapDto,
-  type MoveDto,
-} from '../services/api'
+import { getCurrentEngine } from '../engines/manager'
+import type { Candidate } from '../engines/types'
 import type { Player, Vertex } from '../lib/types'
 
 const BOARD_SIZE = 9
@@ -28,40 +24,37 @@ const GAMES = [
 const vkey = (v: Vertex) => `${v[0]},${v[1]}`
 
 interface Props {
-  onComplete: (overlaps: GameOverlapDto[]) => void
+  onComplete: (overlaps: { max_visits: number; overlap_rate: number; move_count: number }[]) => void
 }
 
 export default function GameStage({ onComplete }: Props) {
   const [gameIdx, setGameIdx] = useState(0)
   const [board, setBoard] = useState(() => GoBoard.fromDimensions(BOARD_SIZE, BOARD_SIZE))
-  const [moves, setMoves] = useState<MoveDto[]>([])
+  const [moves, setMoves] = useState<[string, [number, number] | null][]>([])
   const [userToMove, setUserToMove] = useState(true)
   const [busy, setBusy] = useState(false)
   const [top3, setTop3] = useState<string[]>([])
   const hitsRef = useRef(0)
   const userMovesRef = useRef(0)
   const [status, setStatus] = useState('')
-  const overlapsRef = useRef<GameOverlapDto[]>([])
+  const overlapsRef = useRef<{ max_visits: number; overlap_rate: number; move_count: number }[]>([])
+  const engine = getCurrentEngine()
 
   const current = GAMES[gameIdx]
 
   // 轮到用户时，预取当前局面的参考分析（top-3）
   useEffect(() => {
-    if (!userToMove || busy) return
+    if (!userToMove || busy || !engine.isReady()) return
     let cancelled = false
-    analyzePosition({
-      board_size: BOARD_SIZE,
-      komi: KOMI,
-      max_visits: REFERENCE_VISITS,
-      moves,
-    })
+    engine
+      .analyze({ boardSize: BOARD_SIZE, komi: KOMI, maxVisits: REFERENCE_VISITS, moves })
       .then((res) => {
         if (cancelled) return
         setTop3(
           res.candidates
             .slice(0, 3)
-            .filter((c) => c.move)
-            .map((c) => vkey(c.move as Vertex)),
+            .filter((c: Candidate) => c.move)
+            .map((c: Candidate) => vkey(c.move as Vertex)),
         )
       })
       .catch(() => setTop3([]))
@@ -81,7 +74,6 @@ export default function GameStage({ onComplete }: Props) {
     if (gameIdx + 1 >= GAMES.length) {
       onComplete(overlapsRef.current)
     } else {
-      // 下一局
       setGameIdx((i) => i + 1)
       setBoard(GoBoard.fromDimensions(BOARD_SIZE, BOARD_SIZE))
       setMoves([])
@@ -98,12 +90,11 @@ export default function GameStage({ onComplete }: Props) {
     const analysis = board.analyzeMove(1 as Player, vertex)
     if (analysis.overwrite || analysis.suicide || analysis.ko) return
 
-    // 重合度判定
     if (top3.includes(vkey(vertex))) hitsRef.current += 1
     userMovesRef.current += 1
 
     const newBoard = board.makeMove(1 as Player, vertex)
-    const newMoves: MoveDto[] = [...moves, { color: 'B', vertex }]
+    const newMoves: [string, [number, number] | null][] = [...moves, ['B', vertex]]
     setBoard(newBoard)
     setMoves(newMoves)
 
@@ -114,22 +105,14 @@ export default function GameStage({ onComplete }: Props) {
       return
     }
 
-    // AI 应手
+    // AI 应手（通过引擎抽象层）
     setBusy(true)
     setUserToMove(false)
     try {
-      const resp = await requestAiMove({
-        board_size: BOARD_SIZE,
-        komi: KOMI,
-        max_visits: current.maxVisits,
-        moves: newMoves,
-        ai_color: 'W',
-      })
-      const aiBoard = resp.ai_move
-        ? newBoard.makeMove(-1 as Player, resp.ai_move)
-        : newBoard
+      const resp = await engine.genmove(-1 as Player, BOARD_SIZE, KOMI, current.maxVisits, newMoves)
+      const aiBoard = resp.vertex ? newBoard.makeMove(-1 as Player, resp.vertex) : newBoard
       setBoard(aiBoard)
-      setMoves([...newMoves, { color: 'W', vertex: resp.ai_move }])
+      setMoves([...newMoves, ['W', resp.vertex]])
     } catch {
       setStatus('AI 不可用，本局提前结束。')
       finishGame()
@@ -146,6 +129,7 @@ export default function GameStage({ onComplete }: Props) {
       <p className="hint">
         {current.label} · 你执黑 · 进度 {gameIdx + 1}/{GAMES.length} · 已下{' '}
         {userMovesRef.current}/{MAX_USER_MOVES} 手
+        {!engine.isReady() && ' （引擎未就绪，请先启动后端）'}
       </p>
       <div className="assessment-board">
         <GoBoardCanvas
@@ -153,7 +137,7 @@ export default function GameStage({ onComplete }: Props) {
           boardSize={BOARD_SIZE}
           currentPlayer={1}
           lastMove={null}
-          interactive={userToMove && !busy}
+          interactive={userToMove && !busy && engine.isReady()}
           pixelSize={420}
           onPlay={handlePlay}
         />
