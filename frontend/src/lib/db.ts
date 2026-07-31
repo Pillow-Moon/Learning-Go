@@ -86,7 +86,8 @@ export interface CourseProgress {
   completedSteps: number
   totalSteps: number
   lastStepIndex: number
-  updatedAt: string
+  /** saveCourseProgress 自动填充，调用方可省略 */
+  updatedAt?: string
 }
 
 /** 保存课程进度 */
