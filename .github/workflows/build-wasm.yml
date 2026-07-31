@@ -1,6 +1,8 @@
 # 自动编译 KataGo WebAssembly（浏览器版）
 # 基于 toyoshi/katago-wasm 构建脚本
-# 触发：手动触发 或 push 到 main 且 wasm/ 目录为空时
+# 触发：手动触发 或 push 到 main 且 workflow 自身变更时
+#
+# 构建产物会自动提交到 frontend/public/wasm/ 目录并推送到仓库。
 
 name: Build KataGo WASM
 
@@ -11,18 +13,29 @@ on:
     paths:
       - '.github/workflows/build-wasm.yml'  # 工作流自身变更时触发
 
+permissions:
+  contents: write  # 允许推送 WASM 产物到仓库
+
 jobs:
   build:
     runs-on: ubuntu-latest
     timeout-minutes: 60
 
     steps:
+      # 1. 检出本仓库（用于后续提交产物）
+      - name: Checkout this repo
+        uses: actions/checkout@v4
+        with:
+          path: main-repo
+
+      # 2. 检出 toyoshi/katago-wasm 构建脚本
       - name: Checkout toyoshi/katago-wasm
         uses: actions/checkout@v4
         with:
           repository: toyoshi/katago-wasm
           path: katago-wasm
 
+      # 3. 构建浏览器版 WASM
       - name: Setup & Build Browser WASM
         run: |
           cd katago-wasm
@@ -30,11 +43,41 @@ jobs:
           ./setup.sh
           ./build-browser.sh
 
+      # 4. 复制产物到项目目录
+      - name: Copy WASM artifacts to project
+        run: |
+          mkdir -p main-repo/frontend/public/wasm
+          cp katago-wasm/web/assets/katago.wasm main-repo/frontend/public/wasm/
+          cp katago-wasm/web/assets/katago.js   main-repo/frontend/public/wasm/
+          echo "=== 产物信息 ==="
+          ls -lh main-repo/frontend/public/wasm/
+
+      # 5. 上传 artifact 作为备份（保留 90 天）
       - name: Upload WASM artifact
         uses: actions/upload-artifact@v4
         with:
           name: katago-wasm
           path: |
-            katago-wasm/build/browser/katago.wasm
-            katago-wasm/build/browser/katago.js
-          retention-days: 7
+            katago-wasm/web/assets/katago.wasm
+            katago-wasm/web/assets/katago.js
+          retention-days: 90
+
+      # 6. 自动提交产物到仓库
+      - name: Commit and push artifacts
+        run: |
+          cd main-repo
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          
+          # 仅在有变更时提交
+          git add frontend/public/wasm/katago.wasm frontend/public/wasm/katago.js
+          if git diff --cached --quiet; then
+            echo "没有变更，跳过提交"
+          else
+            git commit -m "chore: 更新 KataGo WASM 产物 [skip ci]"
+            if git pull --rebase origin main && git push; then
+              echo "✅ WASM 产物已提交并推送"
+            else
+              echo "::warning::推送失败（可能有并发提交），产物可从 Artifact 手动下载"
+            fi
+          fi
