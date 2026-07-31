@@ -1,0 +1,40 @@
+# 自动编译 KataGo WebAssembly（浏览器版）
+# 基于 toyoshi/katago-wasm 构建脚本
+# 触发：手动触发 或 push 到 main 且 wasm/ 目录为空时
+
+name: Build KataGo WASM
+
+on:
+  workflow_dispatch:  # 手动触发
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/build-wasm.yml'  # 工作流自身变更时触发
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+
+    steps:
+      - name: Checkout toyoshi/katago-wasm
+        uses: actions/checkout@v4
+        with:
+          repository: toyoshi/katago-wasm
+          path: katago-wasm
+
+      - name: Setup & Build Browser WASM
+        run: |
+          cd katago-wasm
+          chmod +x setup.sh build-browser.sh
+          ./setup.sh
+          ./build-browser.sh
+
+      - name: Upload WASM artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: katago-wasm
+          path: |
+            katago-wasm/build/browser/katago.wasm
+            katago-wasm/build/browser/katago.js
+          retention-days: 7

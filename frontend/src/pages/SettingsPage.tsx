@@ -96,9 +96,7 @@ export default function SettingsPage() {
             className="select"
           >
             <option value="local">Local GPU（本地后端）</option>
-            <option value="browser" disabled>
-              Browser WASM（暂未编译）
-            </option>
+            <option value="browser">Browser WASM（需编译产物）</option>
           </select>
         </div>
         <div className="settings-row">
