@@ -1,5 +1,5 @@
 /**
- * 设置页：引擎来源选择 + LLM Provider 配置。
+ * 设置页：引擎来源选择 + 引擎状态监控 + LLM Provider 配置。
  */
 import { useState } from 'react'
 
@@ -10,14 +10,61 @@ import {
 } from '../services/llmProviders'
 import { testConnection } from '../services/llmClient'
 import { initEngine } from '../engines/manager'
-import type { EngineSource } from '../engines/types'
+import { wasmEngine } from '../engines/wasmEngine'
+import { useEngineStatus } from '../engines/useEngineStatus'
+import type { EngineSource, EngineInfo } from '../engines/types'
+
+/** 引擎状态标签 */
+function EngineCard({
+  info,
+  label,
+  active,
+  action,
+}: {
+  info: EngineInfo
+  label: string
+  active: boolean
+  action?: React.ReactNode
+}) {
+  return (
+    <div className={`engine-card${active ? ' active' : ''}`}>
+      <div className="engine-card-header">
+        <span className={`engine-dot ${info.ready ? 'online' : 'offline'}`} />
+        <span className="engine-card-label">{label}</span>
+        {active && <span className="engine-card-badge">当前使用</span>}
+      </div>
+      <div className="engine-card-body">
+        <div className="engine-card-row">
+          <span className="engine-card-key">KataGo 版本</span>
+          <span className="engine-card-value">
+            {info.model || '（未检测）'}
+          </span>
+        </div>
+        <div className="engine-card-row">
+          <span className="engine-card-key">状态</span>
+          <span className={`engine-card-value ${info.ready ? 'text-ok' : 'text-warn'}`}>
+            {info.ready ? '已就绪' : '未连接'}
+          </span>
+        </div>
+        {info.benchmarkScore > 0 && (
+          <div className="engine-card-row">
+            <span className="engine-card-key">基准</span>
+            <span className="engine-card-value">
+              {info.benchmarkScore} visits/s
+            </span>
+          </div>
+        )}
+      </div>
+      {action && <div className="engine-card-action">{action}</div>}
+    </div>
+  )
+}
 
 export default function SettingsPage() {
   const {
     engineSource,
     providers,
     activeProviderId,
-    benchmarkScore,
     aiStrength,
     setEngineSource,
     addProvider,
@@ -26,6 +73,35 @@ export default function SettingsPage() {
     setActiveProvider,
     setAIStrength,
   } = useSettingsStore()
+
+  const engineStatus = useEngineStatus()
+
+  const [loadingWasm, setLoadingWasm] = useState(false)
+  const [wasmProgress, setWasmProgress] = useState<{ msg: string; pct?: number } | null>(null)
+  const [wasmError, setWasmError] = useState<string | null>(null)
+
+  const handleLoadWasm = async () => {
+    setLoadingWasm(true)
+    setWasmError(null)
+    setWasmProgress({ msg: '准备中...' })
+
+    const timeout = new Promise<never>((_, reject) =>
+      setTimeout(() => reject(new Error('加载超时（30 秒），请检查网络后重试')), 30000),
+    )
+
+    try {
+      await Promise.race([
+        wasmEngine.init((msg, pct) => setWasmProgress({ msg, pct })),
+        timeout,
+      ])
+      setWasmProgress(null)
+    } catch (e) {
+      setWasmError(e instanceof Error ? e.message : '加载失败')
+      setWasmProgress(null)
+    } finally {
+      setLoadingWasm(false)
+    }
+  }
 
   const [selectedPresetId, setSelectedPresetId] = useState('deepseek')
   const [manualModel, setManualModel] = useState('')
@@ -77,7 +153,6 @@ export default function SettingsPage() {
   /** 切换引擎来源 */
   const handleEngineChange = (src: EngineSource) => {
     setEngineSource(src)
-    // 重新初始化引擎
     setTimeout(() => initEngine(), 100)
   }
 
@@ -85,9 +160,66 @@ export default function SettingsPage() {
     <div className="settings-page">
       <h1>设置</h1>
 
-      {/* ===== 引擎来源 ===== */}
+      {/* ===== AI 引擎 ===== */}
       <section className="settings-section">
         <h2>AI 引擎</h2>
+        <div className="engine-cards">
+          <EngineCard
+            info={engineStatus.local}
+            label="Local GPU"
+            active={engineSource === 'local'}
+            action={
+              <a
+                href={`${import.meta.env.BASE_URL}setup-windows.bat`}
+                download
+                className="btn primary small card-btn"
+              >
+                下载启动器
+              </a>
+            }
+          />
+          <EngineCard
+            info={engineStatus.browser}
+            label="Browser WASM"
+            active={engineSource === 'browser'}
+            action={
+              !engineStatus.browser.ready ? (
+                <div className="engine-card-action">
+                  {wasmProgress ? (
+                    <div className="wasm-progress">
+                      <div className="progress-bar">
+                        <div
+                          className="progress-fill"
+                          style={{
+                            width: `${wasmProgress.pct ?? (loadingWasm ? 10 : 0)}%`,
+                          }}
+                        />
+                      </div>
+                      <span className="progress-text">
+                        {wasmProgress.msg}
+                        {wasmProgress.pct != null ? ` ${wasmProgress.pct}%` : ''}
+                      </span>
+                    </div>
+                  ) : (
+                    <button
+                      className="btn primary small card-btn"
+                      disabled={loadingWasm}
+                      onClick={handleLoadWasm}
+                    >
+                      {loadingWasm ? '加载中...' : '加载 WASM 引擎'}
+                    </button>
+                  )}
+                  {wasmError && (
+                    <p className="hint" style={{ color: 'var(--danger)', marginTop: 6 }}>
+                      {wasmError}
+                    </p>
+                  )}
+                </div>
+              ) : undefined
+            }
+          />
+        </div>
+
         <div className="settings-row">
           <span className="settings-label">引擎来源</span>
           <select
@@ -113,22 +245,6 @@ export default function SettingsPage() {
             <option value="strong">强力（更多搜索）</option>
           </select>
         </div>
-        {benchmarkScore > 0 && (
-          <p className="hint">设备基准：{benchmarkScore} visits/s</p>
-        )}
-        {engineSource === 'local' && (
-          <div className="hint" style={{ marginTop: 8 }}>
-            未运行后端？下载{' '}
-            <a
-              href={`${import.meta.env.BASE_URL}setup-windows.bat`}
-              download
-              className="link"
-            >
-              Windows 一键启动器
-            </a>
-            ，双击运行即可自动克隆仓库、安装依赖、下载 KataGo 并启动服务。
-          </div>
-        )}
       </section>
 
       {/* ===== LLM Provider ===== */}

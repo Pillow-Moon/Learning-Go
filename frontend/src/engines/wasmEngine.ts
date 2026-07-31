@@ -89,25 +89,30 @@ export class WasmEngine implements GoEngine {
   >()
   private requestId = 0
 
-  async init(): Promise<void> {
+  async init(onProgress?: (msg: string, pct?: number) => void): Promise<void> {
+    const report = (msg: string, pct?: number) => {
+      console.log(`[WasmEngine] ${msg}`)
+      onProgress?.(msg, pct)
+    }
+
     // 1. 下载模型（优先从 Cache API）
     const cache = await caches.open('katago-model')
     let modelData: ArrayBuffer
     const cached = await cache.match(MODEL_URL)
     if (cached) {
-      console.log('[WasmEngine] 命中缓存，使用已下载的模型')
+      report('使用缓存模型')
       modelData = await cached.arrayBuffer()
     } else {
-      console.log('[WasmEngine] 下载模型（~38MB）...')
+      report('下载模型中...', 0)
       modelData = await downloadWithProgress(MODEL_URL, (pct) => {
-        console.log(`[WasmEngine] 模型下载进度: ${pct}%`)
+        report('下载模型中...', pct)
       })
       await cache.put(MODEL_URL, new Response(modelData))
-      console.log('[WasmEngine] 模型已缓存')
+      report('模型已缓存')
     }
 
-    // 2. 下载分析配置
-    console.log('[WasmEngine] 加载分析配置...')
+    // 2. 加载分析配置
+    report('加载分析配置...')
     const configResp = await fetch('/wasm/analysis.cfg')
     if (!configResp.ok) {
       throw new Error(`加载分析配置失败: HTTP ${configResp.status}`)
@@ -116,6 +121,7 @@ export class WasmEngine implements GoEngine {
     const configData = new TextEncoder().encode(configText).buffer
 
     // 3. 创建 Worker
+    report('启动引擎...')
     this.worker = new Worker(
       new URL('../workers/katago.worker.ts', import.meta.url),
       { type: 'module' },

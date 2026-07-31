@@ -23,8 +23,10 @@ export class LocalEngine implements GoEngine {
     try {
       const resp = await fetch(`${BASE}/health`)
       if (resp.ok) {
+        const body = await resp.json()
+        this.model = body.katago_model ?? body.app ?? 'local'
         this.ready = true
-        console.log('[LocalEngine] 后端已连接')
+        console.log('[LocalEngine] 后端已连接, 模型:', this.model)
       } else {
         throw new Error(`后端响应异常: ${resp.status}`)
       }

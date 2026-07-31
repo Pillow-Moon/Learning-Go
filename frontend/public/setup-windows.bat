@@ -39,10 +39,6 @@ if errorlevel 1 (
     exit /b 1
 )
 
-REM --- Clear global git proxy (may block local network) ---
-git config --global --unset http.proxy >nul 2>nul
-git config --global --unset https.proxy >nul 2>nul
-
 REM --- Clone or update repo ---
 if exist "%INSTALL_DIR%\.git" (
     echo [1/2] Pulling latest code...

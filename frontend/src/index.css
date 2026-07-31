@@ -527,6 +527,134 @@ a {
   cursor: not-allowed;
 }
 
+/* ===== 引擎状态卡片 ===== */
+.engine-cards {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px;
+  margin-bottom: 16px;
+}
+
+.engine-card {
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 14px;
+  transition: border-color 0.2s;
+}
+
+.engine-card.active {
+  border-color: var(--primary);
+  background: #f0f4ff;
+}
+
+.engine-card-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 10px;
+}
+
+.engine-dot {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+
+.engine-dot.online {
+  background: #22c55e;
+  box-shadow: 0 0 6px rgba(34, 197, 94, 0.4);
+}
+
+.engine-dot.offline {
+  background: #9ca3af;
+}
+
+.engine-card-label {
+  font-weight: 600;
+  font-size: 15px;
+}
+
+.engine-card-badge {
+  margin-left: auto;
+  font-size: 11px;
+  background: var(--primary);
+  color: #fff;
+  padding: 2px 8px;
+  border-radius: 10px;
+}
+
+.engine-card-body {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.engine-card-row {
+  display: flex;
+  justify-content: space-between;
+  font-size: 13px;
+}
+
+.engine-card-key {
+  color: var(--text-muted);
+}
+
+.engine-card-value {
+  font-weight: 500;
+}
+
+.text-ok {
+  color: #22c55e;
+}
+
+.text-warn {
+  color: #f59e0b;
+}
+
+.engine-card-action {
+  margin-top: 10px;
+  padding-top: 10px;
+  border-top: 1px solid var(--border);
+}
+
+.card-btn {
+  display: block;
+  width: 100%;
+  text-align: center;
+  text-decoration: none;
+}
+
+/* WASM 加载进度条 */
+.wasm-progress {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.progress-bar {
+  width: 100%;
+  height: 8px;
+  background: var(--border);
+  border-radius: 4px;
+  overflow: hidden;
+}
+
+.progress-fill {
+  height: 100%;
+  background: var(--primary);
+  border-radius: 4px;
+  transition: width 0.3s ease;
+  min-width: 2%;
+}
+
+.progress-text {
+  font-size: 12px;
+  color: var(--text-muted);
+  text-align: center;
+}
+
 /* ===== 评估页 ===== */
 .assessment-page {
   max-width: 720px;
