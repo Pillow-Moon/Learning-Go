@@ -38,10 +38,10 @@
           {
             "id": 3,
             "order_index": 0,
-            "sgf": "(;GM[1]FF[4]SZ[9]PL[B]AB[de][ed][fe]AW[ee])",
+            "sgf": "(;GM[1]FF[4]SZ[9]PL[B]AB[cg][eg][df]AW[dg][cf][ef])",
             "instruction": "打劫：双方可以反复互提一子的特殊形状，规则禁止立即回提。",
             "expected_move": null,
-            "explanation": "提劫后对方需先在他处落子（找劫材）。"
+            "explanation": "黑下 D2 提白 D3 后形成劫。白若立即回提 D3，局面回到提子前——禁止同形再现，所以白必须先找劫材。"
           }
         ]
       }

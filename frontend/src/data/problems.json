@@ -31,9 +31,9 @@
     "category": "规则认知",
     "tag": "打劫",
     "difficulty": 3,
-    "sgf": "(;GM[1]FF[4]SZ[9]PL[B]AB[de][ed][fe]AW[ee][ef][df][ff])",
-    "correct_move": "E5",
-    "explanation": "这是劫争形状，黑可先提劫，但白不能立即回提（需先找劫材）。"
+    "sgf": "(;GM[1]FF[4]SZ[9]PL[B]AB[cg][eg][df]AW[dg][cf][ef])",
+    "correct_move": "D2",
+    "explanation": "黑下 D2 提掉白棋 D3。提子后白若立即在 D3 回提黑 D2，局面将回到提子前——围棋规则禁止全局同形再现，所以白必须先找劫材才能回提。这就是打劫。"
   },
   {
     "id": 5,
