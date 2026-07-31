@@ -25,8 +25,10 @@ class Settings(BaseSettings):
 
     # KataGo（阶段二）
     katago_binary: str = "./katago/katago.exe"
-    katago_model: str = "./katago/models/b18.bin.gz"
-    katago_config: str = "./katago/katago.cfg"
+    katago_model: str = "./katago/models/b10c384h6.bin.gz"
+    # GTP 与 Analysis 线程配置键互斥，必须用两个独立配置文件
+    katago_config: str = "./katago/katago_gtp.cfg"
+    katago_analysis_config: str = "./katago/katago_analysis.cfg"
 
 
 @lru_cache

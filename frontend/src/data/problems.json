@@ -1,0 +1,92 @@
+[
+  {
+    "id": 1,
+    "category": "规则认知",
+    "tag": "气",
+    "difficulty": 1,
+    "sgf": "(;GM[1]FF[4]SZ[9]PL[B]AB[de][fe][ed]AW[ee])",
+    "correct_move": "E4",
+    "explanation": "白子只剩最后一口气（E4 下方），黑下 E4 即可提子。"
+  },
+  {
+    "id": 2,
+    "category": "规则认知",
+    "tag": "吃子",
+    "difficulty": 1,
+    "sgf": "(;GM[1]FF[4]SZ[9]PL[B]AB[de][fe][df][ff][eg]AW[ee][ef])",
+    "correct_move": "E6",
+    "explanation": "两枚白子只剩一口气，黑下 D 列上方（E6 对应点）即提。"
+  },
+  {
+    "id": 3,
+    "category": "规则认知",
+    "tag": "眼",
+    "difficulty": 2,
+    "sgf": "(;GM[1]FF[4]SZ[9]PL[B]AB[cc][dc][cd]AW[dd])",
+    "correct_move": "C7",
+    "explanation": "要点：占据做眼的关键点可形成真眼活棋。"
+  },
+  {
+    "id": 4,
+    "category": "规则认知",
+    "tag": "打劫",
+    "difficulty": 3,
+    "sgf": "(;GM[1]FF[4]SZ[9]PL[B]AB[de][ed][fe]AW[ee][ef][df][ff])",
+    "correct_move": "E5",
+    "explanation": "这是劫争形状，黑可先提劫，但白不能立即回提（需先找劫材）。"
+  },
+  {
+    "id": 5,
+    "category": "规则认知",
+    "tag": "禁入点",
+    "difficulty": 2,
+    "sgf": "(;GM[1]FF[4]SZ[9]PL[B]AB[de][fe][ed]AW[ee])",
+    "correct_move": "E4",
+    "explanation": "E4 下方是合法提子点；而无气又不提子的点属于禁入点（自杀禁着）。"
+  },
+  {
+    "id": 6,
+    "category": "基础技巧",
+    "tag": "征子",
+    "difficulty": 2,
+    "sgf": "(;GM[1]FF[4]SZ[9]PL[B]AB[de][ed]AW[ee])",
+    "correct_move": "F5",
+    "explanation": "征子（扭羊头）：从一侧连续打吃，把白子赶向棋盘边缘提掉。"
+  },
+  {
+    "id": 7,
+    "category": "基础技巧",
+    "tag": "枷吃",
+    "difficulty": 3,
+    "sgf": "(;GM[1]FF[4]SZ[9]PL[B]AB[de][ed]AW[ee])",
+    "correct_move": "F4",
+    "explanation": "枷吃：不直接打吃，而是斜飞一手把白子罩住，使其逃不掉。"
+  },
+  {
+    "id": 8,
+    "category": "基础技巧",
+    "tag": "倒扑",
+    "difficulty": 3,
+    "sgf": "(;GM[1]FF[4]SZ[9]PL[B]AB[ed][fe][dd][ce]AW[ee][de])",
+    "correct_move": "E5",
+    "explanation": "倒扑：先送吃一子，待对方提后反手提掉更多敌子。"
+  },
+  {
+    "id": 9,
+    "category": "基础技巧",
+    "tag": "接不归",
+    "difficulty": 3,
+    "sgf": "(;GM[1]FF[4]SZ[9]PL[B]AB[de][ed][fd][ge]AW[ee][fe])",
+    "correct_move": "E4",
+    "explanation": "接不归：打吃后对方即使连接也仍被提，连接无意义。"
+  },
+  {
+    "id": 10,
+    "category": "基础技巧",
+    "tag": "双活",
+    "difficulty": 4,
+    "sgf": "(;GM[1]FF[4]SZ[9]PL[B]AB[de][ed][fd][ge][ef][ff]AW[ee][fe])",
+    "correct_move": "D6",
+    "explanation": "双活：双方共享公气，谁先动手谁被吃，形成共活。"
+  }
+]

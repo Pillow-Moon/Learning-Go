@@ -1,22 +1,26 @@
 /**
- * 课程列表页。
+ * 课程列表页（纯前端：从 JSON 加载）。
  */
-import { useEffect, useState } from 'react'
+import { useState } from 'react'
 import { Link } from 'react-router-dom'
+import coursesData from '../data/courses.json'
 
-import { getCourses, type CourseListItem } from '../services/api'
+interface CourseSummary {
+  id: number; title: string; description: string
+  dimension: string; difficulty: number; lesson_count: number
+}
 
 export default function CourseListPage() {
-  const [courses, setCourses] = useState<CourseListItem[]>([])
-  const [loading, setLoading] = useState(true)
-
-  useEffect(() => {
-    getCourses()
-      .then(setCourses)
-      .finally(() => setLoading(false))
-  }, [])
-
-  if (loading) return <p className="hint">加载课程中…</p>
+  const [courses] = useState<CourseSummary[]>(() =>
+    coursesData.map((c: any) => ({
+      id: c.id,
+      title: c.title,
+      description: c.description,
+      dimension: c.dimension,
+      difficulty: c.difficulty,
+      lesson_count: c.lessons?.length ?? 0,
+    })),
+  )
 
   return (
     <div className="course-list-page">

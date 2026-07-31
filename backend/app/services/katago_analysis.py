@@ -167,6 +167,6 @@ def get_katago_analysis() -> KataGoAnalysis:
         _analysis_instance = KataGoAnalysis(
             binary=settings.katago_binary,
             model=settings.katago_model,
-            config=settings.katago_config,
+            config=settings.katago_analysis_config,
         )
     return _analysis_instance

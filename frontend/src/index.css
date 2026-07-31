@@ -442,6 +442,77 @@ a {
   white-space: pre-wrap;
 }
 
+/* ===== 设置页 ===== */
+.settings-page {
+  max-width: 640px;
+  margin: 0 auto;
+}
+
+.settings-page h1 {
+  font-size: 26px;
+  margin-bottom: 24px;
+}
+
+.settings-section {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  padding: 20px;
+  box-shadow: var(--shadow);
+  margin-bottom: 20px;
+}
+
+.settings-section h2 {
+  font-size: 18px;
+  margin-bottom: 14px;
+}
+
+.settings-section h3 {
+  font-size: 15px;
+  margin-bottom: 10px;
+}
+
+.settings-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-top: 10px;
+}
+
+.settings-label {
+  min-width: 72px;
+  font-weight: 500;
+}
+
+.input {
+  flex: 1;
+  padding: 8px 12px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  font-size: 14px;
+  background: var(--bg);
+}
+
+.btn.small {
+  padding: 4px 12px;
+  font-size: 13px;
+  border-radius: 6px;
+}
+
+.btn.danger {
+  background: var(--danger);
+  color: #fff;
+}
+
+.btn.danger:hover {
+  opacity: 0.85;
+}
+
+.btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
 /* ===== 评估页 ===== */
 .assessment-page {
   max-width: 720px;

@@ -20,7 +20,9 @@ import type {
   Player,
   Vertex,
 } from '../lib/types'
-import { requestAiMove as apiAiMove, type MoveDto } from '../services/api'
+import { getCurrentEngine } from '../engines/manager'
+import { recommendVisits } from '../engines/benchmark'
+import { useSettingsStore } from './settingsStore'
 
 /** 连续 pass 两次视为终局 */
 const PASS_TO_END = 2
@@ -196,29 +198,45 @@ export const useGameStore = create<GameState>((set, get) => {
       if (s.status !== 'playing' || s.currentPlayer !== s.aiColor) return
       set({ status: 'waiting_ai', aiError: null })
 
-      const moveDtos: MoveDto[] = s.moves.map((m) => ({
-        color: m.color === 1 ? 'B' : 'W',
-        vertex: m.vertex,
-      }))
+      const engine = getCurrentEngine()
+      if (!engine.isReady()) {
+        set({
+          status: 'playing',
+          aiError: '引擎未就绪。请检查：本地后端是否已启动？或在设置中切换引擎来源。',
+        })
+        return
+      }
+
+      // 自适应 maxVisits（若用户未手动覆盖）
+      const { benchmarkScore, aiStrength } = useSettingsStore.getState()
+      let visits = s.maxVisits
+      if (benchmarkScore > 0) {
+        const ratio = aiStrength === 'fast' ? 0.5 : aiStrength === 'strong' ? 2 : 1
+        visits = Math.round(recommendVisits(benchmarkScore, 'move') * ratio)
+      }
+
+      const engineMoves: [string, [number, number] | null][] = s.moves.map((m) => [
+        m.color === 1 ? 'B' : 'W',
+        m.vertex,
+      ])
 
       try {
-        const resp = await apiAiMove({
-          board_size: s.boardSize,
-          komi: s.komi,
-          max_visits: s.maxVisits,
-          moves: moveDtos,
-          ai_color: s.aiColor === 1 ? 'B' : 'W',
-        })
+        const resp = await engine.genmove(
+          s.aiColor,
+          s.boardSize,
+          s.komi,
+          visits,
+          engineMoves,
+        )
         const cur = get()
-        // 状态可能已被悔棋/认输改变
         if (cur.status !== 'waiting_ai') return
 
-        if (resp.ai_move_coord === 'resign') {
+        if (resp.coord === 'resign') {
           const winner = s.aiColor === 1 ? '白' : '黑'
           set({ status: 'finished', result: `${winner}中盘胜（AI 认输）` })
           return
         }
-        if (resp.ai_move_coord === 'pass' || resp.ai_move === null) {
+        if (resp.coord === 'pass' || resp.vertex === null) {
           const move: Move = {
             n: cur.moves.length + 1,
             color: s.aiColor,
@@ -228,9 +246,8 @@ export const useGameStore = create<GameState>((set, get) => {
           pushMove(move, cur.board, null)
           return
         }
-        const analysis = cur.board.analyzeMove(s.aiColor, resp.ai_move)
+        const analysis = cur.board.analyzeMove(s.aiColor, resp.vertex)
         if (analysis.overwrite || analysis.suicide || analysis.ko) {
-          // 理论上 AI 不会返回非法着；兜底为 pass
           const move: Move = {
             n: cur.moves.length + 1,
             color: s.aiColor,
@@ -240,14 +257,14 @@ export const useGameStore = create<GameState>((set, get) => {
           pushMove(move, cur.board, null)
           return
         }
-        const newBoard = cur.board.makeMove(s.aiColor, resp.ai_move)
+        const newBoard = cur.board.makeMove(s.aiColor, resp.vertex)
         const move: Move = {
           n: cur.moves.length + 1,
           color: s.aiColor,
-          vertex: resp.ai_move,
+          vertex: resp.vertex,
           pass: false,
         }
-        pushMove(move, newBoard, resp.ai_move)
+        pushMove(move, newBoard, resp.vertex)
       } catch (err) {
         set({
           status: 'playing',

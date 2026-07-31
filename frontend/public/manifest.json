@@ -1,0 +1,16 @@
+{
+  "name": "围棋AI教学",
+  "short_name": "围棋AI教学",
+  "description": "带 AI 解说的围棋教学平台，从零基础到业余段位的智能学习助手",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#f4f1ea",
+  "theme_color": "#b8860b",
+  "icons": [
+    {
+      "src": "/favicon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml"
+    }
+  ]
+}

@@ -4,7 +4,10 @@
  */
 import { create } from 'zustand'
 
-import { analyzePosition, type Candidate, type MoveDto } from '../services/api'
+import { getCurrentEngine } from '../engines/manager'
+import { recommendVisits } from '../engines/benchmark'
+import { useSettingsStore } from './settingsStore'
+import type { Candidate } from '../engines/types'
 
 interface AnalysisState {
   candidates: Candidate[] | null
@@ -16,7 +19,7 @@ interface AnalysisState {
   analyzedMoveCount: number
 
   analyze: (params: {
-    moves: MoveDto[]
+    moves: { color: string; vertex: [number, number] | null }[]
     boardSize: number
     komi: number
     maxVisits: number
@@ -32,19 +35,42 @@ export const useAnalysisStore = create<AnalysisState>((set) => ({
   error: null,
   analyzedMoveCount: -1,
 
-  analyze: async ({ moves, boardSize, komi, maxVisits }) => {
+  analyze: async ({ moves, boardSize, komi, maxVisits }: {
+    moves: { color: string; vertex: [number, number] | null }[]
+    boardSize: number
+    komi: number
+    maxVisits: number
+  }) => {
     set({ analyzing: true, error: null })
     try {
-      const result = await analyzePosition({
-        board_size: boardSize,
+      const engine = getCurrentEngine()
+      if (!engine.isReady()) {
+        throw new Error('引擎未就绪')
+      }
+
+      // 自适应 maxVisits
+      const { benchmarkScore, aiStrength } = useSettingsStore.getState()
+      let visits = maxVisits
+      if (benchmarkScore > 0) {
+        const ratio = aiStrength === 'fast' ? 0.5 : aiStrength === 'strong' ? 2 : 1
+        visits = Math.round(recommendVisits(benchmarkScore, 'analysis') * ratio)
+      }
+
+      const engineMoves: [string, [number, number] | null][] = moves.map((m) => [
+        m.color,
+        m.vertex,
+      ])
+
+      const result = await engine.analyze({
+        boardSize,
         komi,
-        max_visits: maxVisits,
-        moves,
+        maxVisits: visits,
+        moves: engineMoves,
       })
       set({
-        candidates: result.candidates,
+        candidates: result.candidates as Candidate[],
         rootWinrate: result.root?.winrate ?? null,
-        rootScoreLead: result.root?.score_lead ?? null,
+        rootScoreLead: result.root?.scoreLead ?? null,
         analyzing: false,
         analyzedMoveCount: moves.length,
       })

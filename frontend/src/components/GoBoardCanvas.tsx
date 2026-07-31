@@ -8,7 +8,7 @@ import { useEffect, useRef, useState } from 'react'
 import type GoBoard from '@sabaki/go-board'
 
 import type { Player, Vertex } from '../lib/types'
-import type { Candidate } from '../services/api'
+import type { Candidate } from '../engines/types'
 import { columnLabel, getStarPoints, rowLabel } from '../lib/boardUtils'
 
 const BOARD_BG = '#E8C778'

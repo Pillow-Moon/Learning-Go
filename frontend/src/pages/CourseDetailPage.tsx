@@ -1,11 +1,11 @@
 /**
- * 课程详情页：逐步教学（讲解 + 棋盘演示 + 交互落子）。
+ * 课程详情页（纯前端：从 JSON 加载，逐步教学）。
  */
-import { useEffect, useMemo, useState } from 'react'
+import { useMemo, useState } from 'react'
 import { Link, useParams } from 'react-router-dom'
 
 import GoBoardCanvas from '../components/GoBoardCanvas'
-import { getCourse, updateProgress, type CourseDetail } from '../services/api'
+import coursesData from '../data/courses.json'
 import { parseSgf, gtpToVertex } from '../lib/sgfParser'
 import { vertexToCoord } from '../lib/boardUtils'
 import type { Vertex } from '../lib/types'
@@ -20,22 +20,17 @@ interface FlatStep {
 
 export default function CourseDetailPage() {
   const { id } = useParams()
-  const [course, setCourse] = useState<CourseDetail | null>(null)
-  const [loading, setLoading] = useState(true)
   const [stepIdx, setStepIdx] = useState(0)
   const [answered, setAnswered] = useState<{ correct: boolean } | null>(null)
 
-  useEffect(() => {
-    if (!id) return
-    getCourse(Number(id))
-      .then(setCourse)
-      .finally(() => setLoading(false))
-  }, [id])
-
-  const steps: FlatStep[] = useMemo(() => {
-    if (!course) return []
-    return course.lessons.flatMap((l) =>
-      l.steps.map((s) => ({
+  // 从 JSON 中查找课程
+  const course = useMemo(() => {
+    if (!id) return null
+    const found = coursesData.find((c: any) => c.id === Number(id))
+    if (!found) return null
+    // 扁平化 steps
+    const flat: FlatStep[] = found.lessons.flatMap((l: any) =>
+      l.steps.map((s: any) => ({
         lessonTitle: l.title,
         instruction: s.instruction,
         sgf: s.sgf,
@@ -43,35 +38,26 @@ export default function CourseDetailPage() {
         explanation: s.explanation,
       })),
     )
-  }, [course])
+    return { ...found, flatSteps: flat }
+  }, [id])
 
-  useEffect(() => {
-    setAnswered(null)
-  }, [stepIdx])
-
-  if (loading) return <p className="hint">加载课程中…</p>
   if (!course) return <p className="hint">课程不存在。</p>
 
-  const step = steps[stepIdx]
+  const step = course.flatSteps[stepIdx]
   const parsed = step.sgf ? parseSgf(step.sgf) : null
-  const isLast = stepIdx === steps.length - 1
+  const isLast = stepIdx === course.flatSteps.length - 1
 
   const handlePlay = (vertex: Vertex) => {
     if (!step.expectedMove || answered || !parsed) return
     const coord = vertexToCoord(vertex, parsed.boardSize)
-    const correct = coord.toUpperCase() === step.expectedMove.toUpperCase()
+    const correct = coord.toUpperCase() === step.expectedMove!.toUpperCase()
     setAnswered({ correct })
   }
 
   const goNext = () => {
-    if (isLast) {
-      void updateProgress(course.id, {
-        completed_lessons: course.lessons.length,
-        finished: 1,
-      })
-      return
-    }
+    if (isLast) return
     setStepIdx((i) => i + 1)
+    setAnswered(null)
   }
 
   const expectedVertex =
@@ -84,7 +70,7 @@ export default function CourseDetailPage() {
       </Link>
       <h1>{course.title}</h1>
       <p className="hint">
-        {step.lessonTitle} · 步骤 {stepIdx + 1}/{steps.length}
+        {step.lessonTitle} · 步骤 {stepIdx + 1}/{course.flatSteps.length}
       </p>
 
       <div className="course-step">

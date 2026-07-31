@@ -7,8 +7,20 @@ import { create } from 'zustand'
 import {
   requestCommentary,
   streamCommentary,
-  type CommentaryRequest,
 } from '../services/api'
+
+/** 解说请求（本地定义，避免与 engines 类型耦合） */
+interface CommentaryRequest {
+  move_number: number
+  player: 'black' | 'white'
+  move: string | null
+  board_size: number
+  level: 'beginner' | 'intermediate' | 'advanced'
+  candidates: { move: string | null; winrate: number | null; scoreLead: number | null; visits: number | null; pv: string[] }[]
+  root_winrate: number | null
+  root_score_lead: number | null
+  recent_summary: string | null
+}
 
 export interface CommentaryRecord {
   moveNumber: number
@@ -38,7 +50,7 @@ export const useCommentaryStore = create<CommentaryState>((set, get) => ({
     if (get().streaming) return
     set({ streaming: true, error: null, text: '', currentMove: req.move_number })
     try {
-      const { task_id } = await requestCommentary(req)
+      const { task_id } = await requestCommentary(req as any)
       let acc = ''
       await streamCommentary(task_id, (chunk) => {
         acc += chunk

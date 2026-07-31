@@ -8,6 +8,7 @@ import PlayPage from './pages/PlayPage'
 import AssessmentPage from './pages/AssessmentPage'
 import CourseListPage from './pages/CourseListPage'
 import CourseDetailPage from './pages/CourseDetailPage'
+import SettingsPage from './pages/SettingsPage'
 
 function ComingSoon({ title }: { title: string }) {
   return (
@@ -32,6 +33,7 @@ export default function App() {
           <Link to="/play">对弈</Link>
           <Link to="/assessment">棋力评估</Link>
           <Link to="/course">课程</Link>
+          <Link to="/settings">设置</Link>
         </nav>
       </header>
       <main className="main">
@@ -41,6 +43,7 @@ export default function App() {
           <Route path="/assessment" element={<AssessmentPage />} />
           <Route path="/course" element={<CourseListPage />} />
           <Route path="/course/:id" element={<CourseDetailPage />} />
+          <Route path="/settings" element={<SettingsPage />} />
           <Route path="/review" element={<ComingSoon title="复盘" />} />
           <Route path="*" element={<ComingSoon title="页面不存在" />} />
         </Routes>

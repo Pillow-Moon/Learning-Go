@@ -8,7 +8,15 @@ import { useAnalysisStore } from '../stores/analysisStore'
 import { useCommentaryStore } from '../stores/commentaryStore'
 import { vertexToCoord } from '../lib/boardUtils'
 import type { Vertex } from '../lib/types'
-import type { CommentaryCandidateDto } from '../services/api'
+
+/** 解说请求中传给 LLM 的候选选点格式 */
+interface CommentaryCandidateDto {
+  move: string | null
+  winrate: number | null
+  scoreLead: number | null
+  visits: number | null
+  pv: string[]
+}
 
 type Level = 'beginner' | 'intermediate' | 'advanced'
 
@@ -30,7 +38,7 @@ export default function CommentaryPanel({ onHighlight }: Props) {
     const cands: CommentaryCandidateDto[] = (candidates ?? []).slice(0, 5).map((c) => ({
       move: c.move ? vertexToCoord(c.move, boardSize) : null,
       winrate: c.winrate,
-      score_lead: c.score_lead,
+      scoreLead: c.scoreLead,
       visits: c.visits,
       pv: c.pv.map((v) => vertexToCoord(v, boardSize)),
     }))

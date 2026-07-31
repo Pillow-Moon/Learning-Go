@@ -26,15 +26,17 @@ build/
 .env.local
 backend/.env
 
-# ===== KataGo 二进制与权重（体积大，不入库；cfg 模板保留）=====
-backend/katago/*.exe
-backend/katago/*.bin.gz
-backend/katago/models/
+# ===== KataGo 二进制发行文件（exe/dll/权重/示例配置等不入库）=====
+backend/katago/*
+# 仅保留项目自定义配置
+!backend/katago/katago_gtp.cfg
+!backend/katago/katago_analysis.cfg
 
 # ===== Node / 前端 =====
 node_modules/
 frontend/dist/
 frontend/dist-ssr/
+frontend/wasm/        # KataGo WASM 二进制（体积大）
 *.local
 .npm/
 .eslintcache
