@@ -45,6 +45,8 @@ jobs:
       - name: Download models (b11c768h12 + humanv0)
         shell: pwsh
         run: |
+          # checkout 后目录不存在（.gitignore 排除了 backend/katago/*），需先创建
+          New-Item -ItemType Directory -Force "backend\katago\models" | Out-Null
           $models = @(
             @{ url = "https://github.com/lightvector/KataGo/releases/download/v1.17.0/b11c768h12nbt3tflrs-fson-silu.bin.gz"; out = "backend\katago\models\b11c768h12.bin.gz" },
             @{ url = "https://github.com/lightvector/KataGo/releases/download/v1.15.0/b18c384nbt-humanv0.bin.gz"; out = "backend\katago\models\b18c384nbt-humanv0.bin.gz" }
