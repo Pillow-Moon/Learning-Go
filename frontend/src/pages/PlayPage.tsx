@@ -1,6 +1,6 @@
 /**
- * 对弈页：棋盘 + 控制面板 + 解说面板。
- * 支持本地双人与人机对弈（KataGo）、局面分析、AI 解说与变化图高亮。
+ * 对弈页：左侧棋盘 + 右侧选项卡面板（对局 / AI 解说）。
+ * 对局开始后自动切到 AI 解说，「对局」tab 收缩为紧凑状态条。
  */
 import { useEffect, useState } from 'react'
 
@@ -11,11 +11,16 @@ import { useGameStore } from '../stores/gameStore'
 import { useAnalysisStore } from '../stores/analysisStore'
 import type { Vertex } from '../lib/types'
 
+type SideTab = 'game' | 'commentary'
+
 export default function PlayPage() {
   const { board, boardSize, currentPlayer, lastMove, status, moves, playMove } =
     useGameStore()
-  const { candidates, analyzedMoveCount, clear } = useAnalysisStore()
+  const { candidates, ownership, analyzedMoveCount, clear } = useAnalysisStore()
   const [highlightPv, setHighlightPv] = useState<Vertex[] | null>(null)
+  const [activeTab, setActiveTab] = useState<SideTab>('game')
+  // 领地显示开关（仿星阵：按一下显示地盘渐变、再按关闭；默认关闭）
+  const [showOwnershipEnabled, setShowOwnershipEnabled] = useState(false)
 
   // 局面变化（落子/悔棋）后清除过期的分析结果与高亮
   useEffect(() => {
@@ -24,11 +29,32 @@ export default function PlayPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [moves.length])
 
+  // 对局开始后，「对局设置」收缩为侧边栏并自动切到 AI 解说；对局结束切回「对局」tab
+  useEffect(() => {
+    if (status === 'playing' || status === 'waiting_ai') {
+      setActiveTab('commentary')
+    } else if (status === 'finished') {
+      setActiveTab('game')
+    }
+  }, [status])
+
   const showCandidates = analyzedMoveCount === moves.length ? candidates : null
+  const showOwnership =
+    showOwnershipEnabled && analyzedMoveCount === moves.length ? ownership : null
 
   return (
     <div className="play-page">
       <div className="board-area">
+        <div className="board-toolbar">
+          <button
+            className={`btn small${showOwnershipEnabled ? ' active' : ''}`}
+            onClick={() => setShowOwnershipEnabled((v) => !v)}
+            disabled={analyzedMoveCount !== moves.length}
+            title="显示/隐藏 AI 地盘预测（需要先触发局面分析）"
+          >
+            领地
+          </button>
+        </div>
         <GoBoardCanvas
           board={board}
           boardSize={boardSize}
@@ -36,13 +62,37 @@ export default function PlayPage() {
           lastMove={lastMove}
           interactive={status === 'playing'}
           candidates={showCandidates}
+          ownership={showOwnership}
           highlights={highlightPv}
           onPlay={(v) => playMove(v)}
         />
       </div>
       <div className="side-panels">
-        <GameControls />
-        <CommentaryPanel onHighlight={setHighlightPv} />
+        <div className="side-tabs">
+          <div className="side-tabbar" role="tablist">
+            <button
+              role="tab"
+              aria-selected={activeTab === 'game'}
+              className={`side-tab${activeTab === 'game' ? ' active' : ''}`}
+              onClick={() => setActiveTab('game')}
+            >
+              对局
+            </button>
+            <button
+              role="tab"
+              aria-selected={activeTab === 'commentary'}
+              className={`side-tab${activeTab === 'commentary' ? ' active' : ''}`}
+              onClick={() => setActiveTab('commentary')}
+            >
+              AI 解说
+            </button>
+          </div>
+          {activeTab === 'game' ? (
+            <GameControls />
+          ) : (
+            <CommentaryPanel onHighlight={setHighlightPv} />
+          )}
+        </div>
       </div>
     </div>
   )

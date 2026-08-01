@@ -12,6 +12,11 @@ dist
 dist-ssr
 *.local
 
+# KataGo 模型文件（体积大；仅提交网页版启用的模型，其余保持忽略）
+public/wasm/*.bin.gz
+!public/wasm/b6c96.bin.gz
+!public/wasm/b10c128.bin.gz
+
 # Editor directories and files
 .vscode/*
 !.vscode/extensions.json

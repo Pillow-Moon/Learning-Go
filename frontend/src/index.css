@@ -8,7 +8,46 @@
   --primary-dark: #9a6f08;
   --danger: #c0392b;
   --shadow: 0 2px 12px rgba(0, 0, 0, 0.06);
+  /* 语义色（夜间模式覆盖） */
+  --winrate-track: #f0f0f0;
+  --winrate-fill-a: #111;
+  --winrate-fill-b: #444;
+  --ok-bg: #e6f4ea;
+  --ok-border: #a3d9b1;
+  --err-bg: #fdecea;
+  --err-border: #f5b1a9;
+  --turn-dot-border: #999;
+  --stone-thumb-bg: #e9e2d0;
+  --wr-black: #111;
+  --wr-white: #666;
+  --engine-active-bg: #f0f4ff;
   font-family: 'Segoe UI', 'PingFang SC', 'Microsoft YaHei', system-ui, sans-serif;
+}
+
+/* ===== 夜间模式 ===== */
+:root[data-theme='dark'] {
+  --bg: #17171b;
+  --surface: #232329;
+  --border: #383840;
+  --text: #e6e4df;
+  --text-muted: #b3afa6;
+  --primary: #d9a716;
+  --primary-dark: #e6b832;
+  --danger: #e2574a;
+  --shadow: 0 2px 12px rgba(0, 0, 0, 0.45);
+  --winrate-track: #2e2e36;
+  --winrate-fill-a: #d0d0d0;
+  --winrate-fill-b: #5a5a66;
+  --ok-bg: #1d2b20;
+  --ok-border: #2f5c3c;
+  --err-bg: #2d1d1d;
+  --err-border: #6e3333;
+  --turn-dot-border: #55555e;
+  --stone-thumb-bg: #2a2a30;
+  --wr-black: #e8e6e1;
+  --wr-white: #b8b4ab;
+  --engine-active-bg: #1e2430;
+  --text-secondary: #a6a29a;
 }
 
 * {
@@ -26,6 +65,17 @@ body {
 a {
   color: inherit;
   text-decoration: none;
+}
+
+/* 表单控件覆盖浏览器 UA 黑字默认（夜间模式下 button/select/input 会变黑字） */
+button,
+select,
+input,
+textarea {
+  color: var(--text);
+}
+button:disabled {
+  color: var(--text-muted);
 }
 
 /* ===== 顶部导航 ===== */
@@ -60,8 +110,28 @@ a {
   color: var(--primary-dark);
 }
 
+/* 夜间模式切换按钮 */
+.theme-toggle {
+  border: 1px solid var(--border);
+  background: var(--surface);
+  color: var(--text);
+  width: 34px;
+  height: 34px;
+  border-radius: 8px;
+  cursor: pointer;
+  font-size: 16px;
+  line-height: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: background 0.15s, border-color 0.15s;
+}
+.theme-toggle:hover {
+  border-color: var(--primary);
+}
+
 .main {
-  max-width: 1100px;
+  max-width: 1280px;
   margin: 0 auto;
   padding: 32px 24px;
 }
@@ -125,40 +195,132 @@ a {
 }
 
 /* ===== 对弈页 ===== */
+/* Grid 布局：默认单列（窄屏/面板在棋盘下方时，面板宽度与棋盘一致）；
+   宽屏切换双列（面板在棋盘右侧，stretch 使两列等高，面板高度动态跟随棋盘） */
 .play-page {
-  display: flex;
+  display: grid;
+  grid-template-columns: 1fr;
   gap: 28px;
-  align-items: flex-start;
-  flex-wrap: wrap;
+  align-items: stretch;
 }
 
+@media (min-width: 800px) {
+  .play-page {
+    grid-template-columns: 1fr minmax(320px, 480px);
+  }
+}
+
+/* 棋盘自适应填满所在列（canvas 未传 pixelSize 时按容器宽度响应式） */
 .board-area {
+  min-width: 0;
+  display: flex;
+  justify-content: flex-start;
+  position: relative; /* 工具条绝对定位锚点 */
   background: var(--surface);
   padding: 16px;
   border-radius: 12px;
   box-shadow: var(--shadow);
 }
 
-/* ===== 控制面板 ===== */
-.controls {
+/* 棋盘工具条（仿星阵：领地等显示开关按钮组，悬浮于棋盘左上角） */
+.board-toolbar {
+  position: absolute;
+  top: 8px;
+  left: 8px;
+  z-index: 5;
+  display: flex;
+  gap: 6px;
+}
+
+.board-toolbar .btn.active {
+  background: var(--primary);
+  color: #fff;
+  border-color: var(--primary);
+}
+
+/* ===== 右侧选项卡面板（宽度由 grid 列决定，高度与棋盘一致） ===== */
+.side-panels {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+.side-tabs {
   flex: 1;
-  min-width: 260px;
   background: var(--surface);
   border: 1px solid var(--border);
   border-radius: 12px;
-  padding: 24px;
   box-shadow: var(--shadow);
   display: flex;
   flex-direction: column;
-  gap: 20px;
+  min-height: 0;
+  overflow: hidden;
+}
+
+.side-tabbar {
+  display: flex;
+  border-bottom: 1px solid var(--border);
+  flex-shrink: 0;
+}
+
+.side-tab {
+  flex: 1;
+  padding: 11px 8px;
+  border: none;
+  border-bottom: 2px solid transparent;
+  background: transparent;
+  cursor: pointer;
+  font-size: 14px;
+  font-weight: 500;
+  color: var(--text-muted);
+  transition: color 0.15s, border-color 0.15s, background 0.15s;
+}
+
+.side-tab:hover {
+  color: var(--text);
+  background: var(--bg);
+}
+
+.side-tab.active {
+  color: var(--primary-dark);
+  border-bottom-color: var(--primary);
+  font-weight: 600;
+}
+
+/* tab 内容区：覆盖组件的独立卡片样式，由 .side-tabs 统一承担 */
+.side-tabs .controls,
+.side-tabs .commentary-panel {
+  flex: 1;
+  background: transparent;
+  border: none;
+  border-radius: 0;
+  box-shadow: none;
+  padding: 16px 20px;
+  min-height: 0;
+  overflow-y: auto;
+}
+
+/* ===== 对局选项卡 ===== */
+.controls {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
 }
 
 .controls-status {
   min-height: 32px;
 }
 
+/* 辅助注释：比正文更小 */
 .hint {
   color: var(--text-muted);
+  font-size: 13px;
+}
+
+/* 更小的辅助注释（如模型切换/下载提示） */
+.hint-sm {
+  color: var(--text-muted);
+  font-size: 12px;
 }
 
 .turn {
@@ -173,7 +335,7 @@ a {
   width: 20px;
   height: 20px;
   border-radius: 50%;
-  border: 1px solid #999;
+  border: 1px solid var(--turn-dot-border);
   display: inline-block;
 }
 
@@ -228,8 +390,8 @@ a {
   gap: 10px;
 }
 
-.size-btn {
-  flex: 1;
+.size-btn,
+.seg-btn {
   padding: 8px;
   border: 1px solid var(--border);
   background: var(--surface);
@@ -239,16 +401,66 @@ a {
   transition: all 0.15s;
 }
 
-.size-btn.active {
+.size-btn.active,
+.seg-btn.active {
   background: var(--primary);
   color: #fff;
   border-color: var(--primary);
 }
 
-.controls-actions {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
+/* 操作工具栏：悔棋/虚手/认输 紧凑一行 */
+.game-toolbar {
+  display: flex;
+  gap: 8px;
+  padding-top: 4px;
+  border-top: 1px solid var(--border);
+}
+
+.game-toolbar .btn {
+  flex: 1;
+}
+
+/* ===== 对局设置表单（tab 内平铺） ===== */
+.setup-form {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  padding-top: 4px;
+}
+
+.setup-form-row {
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  gap: 6px;
+}
+
+.setup-form-row .select {
+  width: 100%;
+}
+
+.setup-start {
+  width: 100%;
+  margin-top: 4px;
+}
+
+/* 认输确认弹窗操作按钮 */
+.resign-modal-actions {
+  display: flex;
+  justify-content: flex-end;
   gap: 10px;
+  margin-top: 16px;
+}
+
+.seg-group {
+  display: flex;
+  gap: 8px;
+  flex: 1;
+}
+
+.seg-group .seg-btn {
+  flex: 1;
+  padding: 8px 12px;
 }
 
 /* ===== 按钮 ===== */
@@ -312,26 +524,7 @@ a {
   display: inline-block;
 }
 
-/* ===== 对局设置区 ===== */
-.setup {
-  display: flex;
-  flex-direction: column;
-  gap: 10px;
-  padding-top: 4px;
-  border-top: 1px solid var(--border);
-}
-
-.setup-row {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-}
-
-.setup-row .info-label {
-  min-width: 44px;
-  margin-bottom: 0;
-}
-
+/* ===== 下拉选择框 ===== */
 .select {
   flex: 1;
   padding: 8px;
@@ -342,17 +535,49 @@ a {
   cursor: pointer;
 }
 
-/* ===== 分析区 ===== */
-.analysis-box {
+/* ===== 黑白胜率对比 ===== */
+.winrate-compare {
   display: flex;
   flex-direction: column;
-  gap: 8px;
+  gap: 4px;
   padding-top: 4px;
   border-top: 1px solid var(--border);
 }
 
-.analysis-box .btn {
-  width: 100%;
+.winrate-labels {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.wr-black {
+  color: var(--wr-black);
+}
+
+.wr-white {
+  color: var(--wr-white);
+}
+
+.wr-score {
+  color: var(--text-secondary, #888);
+  font-weight: 500;
+  font-size: 12px;
+}
+
+.winrate-track {
+  height: 8px;
+  border-radius: 4px;
+  background: var(--winrate-track);
+  overflow: hidden;
+}
+
+.winrate-fill {
+  height: 100%;
+  border-radius: 4px;
+  background: linear-gradient(90deg, var(--winrate-fill-a), var(--winrate-fill-b));
+  transition: width 0.3s ease;
 }
 
 /* ===== 错误提示 ===== */
@@ -363,13 +588,14 @@ a {
   cursor: default;
 }
 
-/* ===== 侧栏布局 ===== */
-.side-panels {
-  flex: 1;
-  min-width: 280px;
+/* ===== 解说选项卡：分析与解说操作按钮 ===== */
+.commentary-actions {
   display: flex;
-  flex-direction: column;
-  gap: 20px;
+  gap: 8px;
+}
+
+.commentary-actions .btn {
+  flex: 1;
 }
 
 /* ===== 解说面板 ===== */
@@ -406,7 +632,66 @@ a {
   padding: 14px;
   font-size: 15px;
   line-height: 1.7;
-  white-space: pre-wrap;
+}
+
+/* Markdown 渲染样式（AI 解说可输出 Markdown，客户端负责渲染） */
+.commentary-text > :first-child,
+.history-item > :first-child {
+  margin-top: 0;
+}
+.commentary-text > :last-child,
+.history-item > :last-child {
+  margin-bottom: 0;
+}
+.commentary-text p,
+.commentary-text ul,
+.commentary-text ol,
+.commentary-text blockquote,
+.history-item p,
+.history-item ul,
+.history-item ol,
+.history-item blockquote {
+  margin: 0 0 8px;
+}
+.commentary-text ul,
+.commentary-text ol,
+.history-item ul,
+.history-item ol {
+  padding-left: 20px;
+}
+.commentary-text li,
+.history-item li {
+  margin: 2px 0;
+}
+.commentary-text h1,
+.commentary-text h2,
+.commentary-text h3,
+.commentary-text h4,
+.history-item h1,
+.history-item h2,
+.history-item h3,
+.history-item h4 {
+  margin: 12px 0 6px;
+  font-size: inherit;
+  font-weight: 700;
+}
+.commentary-text strong,
+.history-item strong {
+  font-weight: 700;
+  color: var(--primary, inherit);
+}
+.commentary-text code,
+.history-item code {
+  background: rgba(127, 127, 127, 0.18);
+  padding: 1px 5px;
+  border-radius: 4px;
+  font-size: 0.92em;
+}
+.commentary-text blockquote,
+.history-item blockquote {
+  padding-left: 10px;
+  border-left: 3px solid rgba(127, 127, 127, 0.4);
+  color: var(--text-muted);
 }
 
 .cursor {
@@ -451,11 +736,6 @@ a {
   font-size: 14px;
 }
 
-.history-item p {
-  margin-top: 4px;
-  white-space: pre-wrap;
-}
-
 /* ===== 设置页 ===== */
 .settings-page {
   max-width: 640px;
@@ -486,6 +766,129 @@ a {
   margin-bottom: 10px;
 }
 
+/* 区块标题行：标题 + 右侧操作按钮 */
+.section-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  margin-bottom: 14px;
+}
+.section-head h2 {
+  margin-bottom: 0;
+}
+
+/* 引擎与模型说明弹窗 */
+.modal-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.45);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 100;
+  padding: 16px;
+}
+.modal {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  padding: 20px 24px;
+  max-width: 680px;
+  width: 100%;
+  max-height: 85vh;
+  overflow-y: auto;
+  box-shadow: 0 8px 30px rgba(0, 0, 0, 0.3);
+}
+.modal-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  margin-bottom: 4px;
+}
+.modal h2 {
+  margin: 0;
+  font-size: 18px;
+}
+.modal h3 {
+  font-size: 14px;
+  margin: 16px 0 8px;
+}
+.modal .hint {
+  margin: 4px 0 8px;
+}
+
+/* 对比表格 */
+.cmp-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 13px;
+  margin-top: 6px;
+}
+.cmp-table th,
+.cmp-table td {
+  border: 1px solid var(--border);
+  padding: 6px 10px;
+  text-align: left;
+  vertical-align: top;
+}
+.cmp-table th {
+  background: var(--bg);
+  font-weight: 600;
+  white-space: nowrap;
+}
+.cmp-table tr:first-child th {
+  border-top: none;
+}
+.cmp-table th:first-child,
+.cmp-table td:first-child {
+  border-left: none;
+}
+.cmp-table th:last-child,
+.cmp-table td:last-child {
+  border-right: none;
+}
+
+/* 说明列表 */
+.help-list {
+  margin: 6px 0 0;
+  padding-left: 20px;
+  line-height: 1.7;
+  font-size: 13px;
+}
+.help-list li {
+  margin-bottom: 4px;
+}
+
+/* 排除法向导 */
+.wizard-q {
+  margin-top: 10px;
+}
+.wizard-q-title {
+  font-size: 13px;
+  font-weight: 600;
+  margin-bottom: 6px;
+}
+.wizard-q-opts {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+.wizard-q-opts .btn {
+  flex: 1 1 auto;
+  white-space: normal;
+}
+.wizard-result {
+  margin-top: 12px;
+  padding: 12px 14px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--bg);
+  font-size: 13px;
+  line-height: 1.6;
+}
+
 .settings-row {
   display: flex;
   align-items: center;
@@ -494,8 +897,26 @@ a {
 }
 
 .settings-label {
-  min-width: 72px;
+  /* 固定宽度让各行 select/input 右缘对齐（最宽标签如「KataGo 模型」）
+     用 min-width 会导致标签按内容撑开、select 宽度不一 */
+  flex: 0 0 92px;
+  white-space: nowrap;
   font-weight: 500;
+}
+
+/* 棋盘 / 棋子样式缩略图 */
+.board-thumb,
+.stone-thumb {
+  width: 48px;
+  height: 48px;
+  border-radius: 6px;
+  flex-shrink: 0;
+}
+.board-thumb {
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.25);
+}
+.stone-thumb {
+  background: var(--stone-thumb-bg);
 }
 
 .input {
@@ -541,11 +962,13 @@ a {
   border-radius: 10px;
   padding: 14px;
   transition: border-color 0.2s;
+  display: flex;
+  flex-direction: column;
 }
 
 .engine-card.active {
   border-color: var(--primary);
-  background: #f0f4ff;
+  background: var(--engine-active-bg);
 }
 
 .engine-card-header {
@@ -589,6 +1012,7 @@ a {
   display: flex;
   flex-direction: column;
   gap: 4px;
+  flex: 1;
 }
 
 .engine-card-row {
@@ -626,6 +1050,16 @@ a {
   text-decoration: none;
 }
 
+.card-btn-row {
+  display: flex;
+  gap: 8px;
+}
+
+.card-btn-row .card-btn {
+  flex: 1;
+  min-width: 0;
+}
+
 /* WASM 加载进度条 */
 .wasm-progress {
   display: flex;
@@ -649,10 +1083,96 @@ a {
   min-width: 2%;
 }
 
+/* 不确定进度条：无明确进度（如模型加载/等待分析）时循环滚动提示"处理中" */
+.progress-bar.indeterminate .progress-fill {
+  width: 40%;
+  min-width: 0;
+  animation: indeterminate 1.2s ease-in-out infinite;
+}
+
+@keyframes indeterminate {
+  0% {
+    margin-left: -40%;
+  }
+  100% {
+    margin-left: 100%;
+  }
+}
+
 .progress-text {
   font-size: 12px;
   color: var(--text-muted);
   text-align: center;
+}
+
+/* 进入页面自动加载 WASM 引擎时的全屏加载页 */
+.wasm-screen {
+  position: fixed;
+  inset: 0;
+  z-index: 200;
+  background: var(--bg);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.wasm-screen-inner {
+  width: min(440px, calc(100vw - 48px));
+  text-align: center;
+}
+.wasm-screen-brand {
+  font-size: 26px;
+  font-weight: 700;
+  color: var(--primary-dark);
+  margin-bottom: 14px;
+  letter-spacing: 2px;
+}
+.wasm-screen-title {
+  font-size: 16px;
+  color: var(--text);
+  margin-bottom: 24px;
+}
+.wasm-screen-bar-row {
+  display: flex;
+  justify-content: center; /* 进度条单独一行，绝对居中 */
+}
+.wasm-screen-bar {
+  width: min(360px, 100%);
+  height: 10px;
+  background: var(--border);
+  border-radius: 6px;
+  overflow: hidden;
+}
+.wasm-screen-fill {
+  height: 100%;
+  border-radius: 6px;
+  background: linear-gradient(90deg, var(--primary), var(--primary-dark));
+  box-shadow: 0 0 10px rgba(184, 134, 11, 0.45);
+  transition: width 0.3s ease;
+  min-width: 2%;
+}
+.wasm-screen-bar.indeterminate .wasm-screen-fill {
+  width: 40%;
+  min-width: 0;
+  animation: indeterminate 1.2s ease-in-out infinite;
+}
+.wasm-screen-pct {
+  margin-top: 8px;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text);
+  text-align: center;
+  font-variant-numeric: tabular-nums;
+}
+.wasm-screen-msg {
+  margin-top: 14px;
+  font-size: 13px;
+  color: var(--text-muted);
+}
+.wasm-screen-comfort {
+  margin-top: 10px;
+  font-size: 13px;
+  color: var(--text-secondary);
+  font-style: italic;
 }
 
 /* ===== 评估页 ===== */
@@ -682,13 +1202,13 @@ a {
 }
 
 .feedback.correct {
-  background: #e6f4ea;
-  border: 1px solid #a3d9b1;
+  background: var(--ok-bg);
+  border: 1px solid var(--ok-border);
 }
 
 .feedback.wrong {
-  background: #fdecea;
-  border: 1px solid #f5b1a9;
+  background: var(--err-bg);
+  border: 1px solid var(--err-border);
 }
 
 .feedback p {

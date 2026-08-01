@@ -15,13 +15,19 @@ class MoveIn(BaseModel):
 
 
 class GameMoveRequest(BaseModel):
-    """请求 AI 应手。moves 为完整历史（含用户最新一手），AI 执 ai_color。"""
+    """请求 AI 应手。moves 为完整历史（含用户最新一手），AI 执 ai_color。
+
+    strength_id 非空且映射到 Human-SL profile（am20k~am7d）时，
+    后端切换到 Human-SL 对弈模式（档位由 profile 决定，忽略 max_visits）；
+    否则（pro 档/无映射）使用正常模型 + max_visits。
+    """
 
     board_size: int = 19
     komi: float = 7.5
     max_visits: int = 100
     moves: list[MoveIn] = Field(default_factory=list)
     ai_color: str = "W"
+    strength_id: str | None = None
 
 
 class GameMoveResponse(BaseModel):
@@ -54,15 +60,17 @@ class AnalysisResult(BaseModel):
     board_size: int
     candidates: list[Candidate] = Field(default_factory=list)
     root: dict = Field(default_factory=dict)
+    # 地盘预测（KataGo 响应顶层）：正=黑、负=白，绝对值越大越实
+    ownership: list[float] | None = None
 
 
 class AnalysisTaskResponse(BaseModel):
     task_id: str
-    status: str  # pending / done / error
+    status: str  # pending / running / done / error
 
 
 class AnalysisStatusResponse(BaseModel):
     task_id: str
-    status: str  # pending / done / error
+    status: str  # pending / running / done / error
     result: AnalysisResult | None = None
     error: str | None = None

@@ -32,13 +32,23 @@ async def _run_analysis(task_id: str, req: AnalysisRequest) -> None:
     try:
         engine = get_katago_analysis()
         moves = [(m.color, m.vertex) for m in req.moves]
+
+        async def _on_snapshot(snapshot: dict) -> None:
+            # 中间快照：搜索期间的中间态结果，让前端实时增量渲染
+            # （status=running + 最新 result，最终行仍会先写这里再写 done）
+            _tasks[task_id] = {"status": "running", "result": snapshot, "error": None}
+
         result = await engine.analyze(
-            moves, req.board_size, req.komi, req.max_visits
+            moves,
+            req.board_size,
+            req.komi,
+            req.max_visits,
+            on_snapshot=_on_snapshot,
         )
         _tasks[task_id] = {"status": "done", "result": result, "error": None}
     except Exception as exc:  # noqa: BLE001
-        logger.error("分析任务失败: %s", exc)
-        _tasks[task_id] = {"status": "error", "result": None, "error": str(exc)}
+        logger.error("分析任务失败: %s", exc, exc_info=True)
+        _tasks[task_id] = {"status": "error", "result": None, "error": f"{type(exc).__name__}: {exc!r}"}
 
 
 @router.post("", response_model=AnalysisTaskResponse)

@@ -42,6 +42,31 @@ npm run dev
 
 前端设置中选择 "Local GPU" 引擎来源。
 
+### 桌面引擎绿色包（推荐，无需 Python）
+
+设置页「下载桌面引擎」或 GitHub Release 获取 `WeiQiAI-Engine-win64.zip`（约 400~450MB，模型内置）：
+
+1. 解压到任意目录（如 `D:\WeiQiAI\`，避免系统盘权限问题）
+2. 双击 `WeiQiAI-Engine.exe`（控制台窗口即后端：日志、IP、连接指引；**关闭窗口即停止**）
+3. 浏览器打开前端（GitHub Pages 或本地 `npm run dev`），设置中选择 "Local GPU"
+
+> Windows SmartScreen 提示时选「更多信息 → 仍要运行」（未签名）；首次监听防火墙弹窗请允许（局域网/远程访问需要）。
+
+### 手机远程对弈（Tailscale）
+
+在家用电脑是主形态；外出用手机时，通过 Tailscale 连回家里电脑获得完整棋力：
+
+1. 电脑安装 [Tailscale](https://tailscale.com/download) 并登录
+2. 手机安装 Tailscale App，登录同一账号
+3. 设置页「远程连接」查看本机 Tailscale 地址（`http://100.x.x.x:8000/api/v1`，固定不变），手机端「引擎来源 → Local GPU」填入该地址（填一次永久生效）
+
+> 电脑需保持开机；未配置远程时，手机端回退浏览器 WASM（离线兜底，简化档位）。
+
+### 引擎控制面板
+
+后端自带 Web 控制面板：浏览器访问 `http://localhost:8000/admin`（Tailscale 组网下手机也可访问排障），
+可查看引擎状态、实时日志，并重启/停止 KataGo 引擎。
+
 ## 目录结构
 
 ```
@@ -58,18 +83,24 @@ Learning-Go/
 │   │   └── data/          # 静态数据（课程/题库 JSON）
 │   └── public/            # 静态资源 + PWA manifest + Service Worker
 ├── backend/               # FastAPI 后端（可选本地 GPU 引擎）
+│   ├── build_exe.spec     # PyInstaller 绿色包构建（CI 自动产出 zip）
+│   └── calibration/       # 强度校准记录（L1/L3 实测结论）
+├── shared/                # 前后端共享参数（ai-strength.json 强度标尺单一来源）
 ├── deploy/                # 部署脚本 + GPU 引擎启动器
 └── .gitignore
 ```
 
 ## 功能
 
-- **人机对弈**：9/13/19 路，KataGo 引擎，五档难度
-- **局面分析**：候选选点 + 胜率 + 变化图叠加显示
+- **人机对弈**：9/13/19 路，KataGo 引擎；19 路 Local 档位（业余 20 级 ~ 职业九段）
+  - 低中档（am20k~am7d）使用官方 Human-SL 人类风格标尺（rank_20k~rank_7d）
+  - 高档（am6d/am7d）搜索增强（官方 9d 配方）；职业档走正常引擎 visits
+  - WASM 端为离线兜底：简化 5 档（标签带「约」）
+- **局面分析**：候选选点 + 胜率 + 变化图叠加显示；领地显示按钮（仿星阵，按需开关）
 - **AI 解说**：BYOK 模式，支持 9 类 LLM provider，流式输出，无 key 降级展示 KataGo 数据
 - **棋力评估**：四阶段定级（规则认知/基础技巧/实战对弈/五维雷达报告）
 - **课程系统**：入门到进阶，棋盘交互教学
-- **PWA**：可安装到手机主屏幕，离线可用
+- **PWA**：可安装到手机主屏幕，离线可用（WASM b6c96 兜底）
 
 ## 许可
 

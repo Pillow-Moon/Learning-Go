@@ -95,4 +95,27 @@ describe('终局与悔棋', () => {
     expect(s().currentPlayer).toBe(-1) // 轮回白
     expect(s().lastMove).toEqual([4, 4])
   })
+
+  it('resetToSetup 清空棋盘并回到 idle', () => {
+    s().playMove([4, 4])
+    s().playMove([2, 2])
+    s().resign()
+    expect(s().status).toBe('finished')
+    expect(s().moves.length).toBe(2)
+
+    s().resetToSetup()
+    expect(s().status).toBe('idle')
+    expect(s().moves.length).toBe(0)
+    expect(s().history.length).toBe(0)
+    expect(s().result).toBeNull()
+    expect(s().boardSize).toBe(9) // 保留设置
+    // 棋盘已清空
+    let occupied = false
+    for (let x = 0; x < s().boardSize; x++) {
+      for (let y = 0; y < s().boardSize; y++) {
+        if (s().board.get([x, y]) !== 0) occupied = true
+      }
+    }
+    expect(occupied).toBe(false)
+  })
 })

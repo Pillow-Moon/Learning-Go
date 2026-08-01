@@ -2,6 +2,8 @@
 from fastapi import APIRouter
 
 from app.api.v1.analysis import router as analysis_router
+from app.api.v1.admin import router as admin_router
+from app.api.v1.engine import router as engine_router
 from app.api.v1.game import router as game_router
 from app.api.v1.health import router as health_router
 
@@ -10,3 +12,5 @@ api_router = APIRouter()
 api_router.include_router(health_router)
 api_router.include_router(game_router)
 api_router.include_router(analysis_router)
+api_router.include_router(engine_router)
+api_router.include_router(admin_router)

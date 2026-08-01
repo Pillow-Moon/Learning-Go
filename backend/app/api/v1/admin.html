@@ -1,0 +1,128 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>围棋 AI 引擎控制面板</title>
+<style>
+  :root { color-scheme: light dark; }
+  * { box-sizing: border-box; }
+  body {
+    font-family: system-ui, -apple-system, "Segoe UI", "Microsoft YaHei", sans-serif;
+    margin: 0; padding: 16px; max-width: 860px; margin: 0 auto;
+    background: #f7f7f5; color: #222;
+  }
+  @media (prefers-color-scheme: dark) {
+    body { background: #1a1a1a; color: #ddd; }
+    .card { background: #262626; border-color: #3a3a3a; }
+    .log { background: #111; color: #9f9; }
+    button { background: #333; color: #ddd; border-color: #555; }
+  }
+  h1 { font-size: 20px; }
+  .card {
+    background: #fff; border: 1px solid #e3e3e0; border-radius: 10px;
+    padding: 12px 16px; margin-bottom: 12px;
+  }
+  .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 8px; }
+  .item .k { font-size: 12px; opacity: .6; }
+  .item .v { font-size: 14px; word-break: break-all; }
+  .ok { color: #1a7f37; } .warn { color: #c77c00; }
+  .log {
+    background: #0f0f0f; color: #8f8; font: 12px/1.6 ui-monospace, Consolas, monospace;
+    height: 320px; overflow-y: auto; padding: 10px; border-radius: 8px; white-space: pre-wrap;
+  }
+  .actions { display: flex; gap: 8px; margin-bottom: 12px; }
+  button {
+    padding: 8px 16px; border: 1px solid #ccc; border-radius: 8px;
+    background: #fff; cursor: pointer; font-size: 14px;
+  }
+  button:hover { background: #f0f0f0; }
+  button.danger { color: #d1242f; border-color: #d1242f; }
+  .hint { font-size: 13px; opacity: .7; }
+</style>
+</head>
+<body>
+  <h1>围棋 AI 引擎控制面板</h1>
+
+  <div class="card">
+    <div class="grid" id="status"></div>
+  </div>
+
+  <div class="actions">
+    <button id="btnRestart">重启引擎</button>
+    <button id="btnStop" class="danger">停止引擎</button>
+    <span class="hint" id="actionMsg"></span>
+  </div>
+
+  <div class="card">
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px">
+      <strong>运行日志（最近 200 条，自动刷新）</strong>
+      <span class="hint" id="logTs"></span>
+    </div>
+    <div class="log" id="logs"></div>
+  </div>
+
+<script>
+const $ = (id) => document.getElementById(id)
+const API = '/api/v1'
+
+async function loadStatus() {
+  try {
+    const s = await (await fetch(API + '/admin/status')).json()
+    const ts = s.tailscale_ip
+      ? `<span class="ok">${s.tailscale_ip}</span>`
+      : '<span class="warn">未安装/未登录</span>'
+    const gtp = s.gtp_running
+      ? '<span class="ok">运行中</span>'
+      : '<span class="warn">未启动（首次请求时自动启动）</span>'
+    const lan = (s.lan_ips || []).length
+      ? s.lan_ips.map((ip) => `http://${ip}:${s.port}/api/v1`).join('<br>')
+      : '-'
+    $('status').innerHTML = `
+      <div class="item"><div class="k">后端状态</div><div class="v ok">运行中</div></div>
+      <div class="item"><div class="k">当前模型</div><div class="v">${s.model}</div></div>
+      <div class="item"><div class="k">Human-SL 对弈引擎</div><div class="v">${s.human_sl_ready ? '<span class="ok">已就绪</span>' : '<span class="warn">未安装</span>'}</div></div>
+      <div class="item"><div class="k">KataGo 进程</div><div class="v">${gtp}</div></div>
+      <div class="item"><div class="k">Tailscale 地址</div><div class="v">${ts}</div></div>
+      <div class="item"><div class="k">局域网地址</div><div class="v">${lan}</div></div>
+      <div class="item"><div class="k">手机连接地址</div><div class="v">${s.tailscale_ip ? `http://${s.tailscale_ip}:${s.port}/api/v1` : '-（需 Tailscale）'}</div></div>
+    `
+  } catch (e) {
+    $('status').innerHTML = `<div class="v warn">状态获取失败：${e}</div>`
+  }
+}
+
+async function loadLogs() {
+  try {
+    const d = await (await fetch(API + '/admin/logs?tail=200')).json()
+    $('logs').textContent = (d.lines || []).join('\n') || '（暂无日志）'
+    $('logTs').textContent = new Date().toLocaleTimeString()
+    const el = $('logs')
+    // 只在用户未上滚时自动滚底
+    if (el.scrollTop + el.clientHeight >= el.scrollHeight - 40) {
+      el.scrollTop = el.scrollHeight
+    }
+  } catch (e) {
+    $('logs').textContent = '日志获取失败：' + e
+  }
+}
+
+async function post(path, msg) {
+  $('actionMsg').textContent = '处理中…'
+  try {
+    const r = await (await fetch(API + path, { method: 'POST' })).json()
+    $('actionMsg').textContent = r.message || msg
+  } catch (e) {
+    $('actionMsg').textContent = '操作失败：' + e
+  }
+}
+
+$('btnRestart').addEventListener('click', () => post('/admin/engine/restart', '已请求重启'))
+$('btnStop').addEventListener('click', () => post('/admin/engine/stop', '已请求停止'))
+
+loadStatus(); loadLogs()
+setInterval(loadStatus, 2000)
+setInterval(loadLogs, 2000)
+</script>
+</body>
+</html>

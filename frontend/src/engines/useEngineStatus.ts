@@ -11,20 +11,6 @@ export interface DualEngineStatus {
   browser: EngineInfo
 }
 
-const EMPTY_LOCAL: EngineInfo = {
-  source: 'local',
-  model: '',
-  ready: false,
-  benchmarkScore: -1,
-}
-
-const EMPTY_WASM: EngineInfo = {
-  source: 'browser',
-  model: '',
-  ready: false,
-  benchmarkScore: -1,
-}
-
 export function useEngineStatus(pollMs = 3000) {
   const [status, setStatus] = useState<DualEngineStatus>({
     local: { ...localEngine.getInfo() },

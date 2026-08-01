@@ -8,6 +8,7 @@ import ProblemStage from '../components/ProblemStage'
 import GameStage from '../components/GameStage'
 import RadarChart from '../components/RadarChart'
 import { computeReport, type AssessmentReport } from '../lib/assessment'
+import { useSettingsStore } from '../stores/settingsStore'
 
 /** 评估流程各阶段 */
 type Stage = 'intro' | 'rules' | 'techniques' | 'games' | 'report'
@@ -27,6 +28,7 @@ interface GameOverlap {
 }
 
 export default function AssessmentPage() {
+  const engineSource = useSettingsStore((s) => s.engineSource)
   const [stage, setStage] = useState<Stage>('intro')
   const [problemResults, setProblemResults] = useState<ProblemResult[]>([])
   const [gameOverlaps, setGameOverlaps] = useState<GameOverlap[]>([])
@@ -86,6 +88,11 @@ export default function AssessmentPage() {
   if (stage === 'games') {
     return (
       <div className="assessment-page">
+        {engineSource === 'browser' && (
+          <p className="hint-sm" style={{ marginBottom: 12 }}>
+            当前为轻量引擎（WASM b6c96），实战评估结果仅供参考；建议连接本地引擎获得准确评估（设置页「远程连接」指引）。
+          </p>
+        )}
         <GameStage
           onComplete={(overlaps) => {
             setGameOverlaps(overlaps)

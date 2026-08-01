@@ -13,14 +13,23 @@ from __future__ import annotations
 
 import asyncio
 import logging
+import sys
 from pathlib import Path
 
 from app.core.config import get_settings
+from app.services import engine_manager
 
 logger = logging.getLogger(__name__)
 
 # 列坐标字母（围棋惯例跳过 I）
 _LETTERS = "ABCDEFGHJKLMNOPQRSTUVWXYZ"
+
+
+def _human_gtp_cfg_path() -> str:
+    """Human-SL 对弈配置路径：绿色包内（只读）；开发 = backend/katago/human_gtp.cfg。"""
+    if getattr(sys, "frozen", False):
+        return str(Path(sys._MEIPASS) / "katago" / "human_gtp.cfg")
+    return str(Path(__file__).resolve().parents[2] / "katago" / "human_gtp.cfg")
 
 
 class KataGoError(RuntimeError):
@@ -48,10 +57,24 @@ def gtp_to_vertex(coord: str, board_size: int) -> tuple[int, int] | None:
 class KataGoGTP:
     """管理单个 KataGo GTP 进程。"""
 
-    def __init__(self, binary: str, model: str, config: str | None = None):
+    def __init__(
+        self,
+        binary: str,
+        model: str,
+        config: str | None = None,
+        human_model: str | None = None,
+        human_sl_profile: str | None = None,
+    ):
+        """human_model：Human-SL 权重路径（启动时追加 -human-model <path>）。
+
+        human_sl_profile 仅作记录（日志），Human-SL 段位由 config 文件中的
+        humanSLProfile 字段承载（KataGo 启动参数不含 profile）。
+        """
         self.binary = binary
         self.model = model
         self.config = config
+        self.human_model = human_model
+        self.human_sl_profile = human_sl_profile
         self.proc: asyncio.subprocess.Process | None = None
         self._lock = asyncio.Lock()
         self.board_size = 19
@@ -65,6 +88,8 @@ class KataGoGTP:
         if self.is_running:
             return
         args = [self.binary, "gtp", "-model", self.model]
+        if self.human_model:
+            args += ["-human-model", self.human_model]
         if self.config and Path(self.config).exists():
             args += ["-config", self.config]
         logger.info("启动 KataGo GTP: %s", " ".join(args))
@@ -150,6 +175,27 @@ class KataGoGTP:
         """设置搜索量，控制 AI 难度。"""
         await self.command(f"kata-set-param maxVisits {visits}")
 
+    async def set_human_sl_profile(self, profile: str) -> None:
+        """动态切换 Human-SL 档位（rank_20k~rank_9d，运行中生效无需重启）。"""
+        await self.command(f"kata-set-param humanSLProfile {profile}")
+
+    async def set_human_sl_pikl_lambda(self, value: float) -> None:
+        """Human-SL 搜索抑制系数：1e8 = 纯风格（不抑制人类随手）；
+        0.08 ≈ 官方 9d 增强档（抑制 KataGo 不认同的着法，棋力更强更不像人类）。"""
+        await self.command(f"kata-set-param humanSLChosenMovePiklLambda {value}")
+
+    async def set_human_sl_explore(self, enabled: bool) -> None:
+        """官方 9d 增强配方：enabled 时 80% visits 探索人类着法且衰减不收敛。
+
+        增强档（am6d/am7d）用 0.8 / 2.0；普通档恢复 0.0 / 0.2。
+        """
+        await self.command(
+            f"kata-set-param humanSLRootExploreProbWeightless {0.8 if enabled else 0.0}"
+        )
+        await self.command(
+            f"kata-set-param humanSLCpuctPermanent {2.0 if enabled else 0.2}"
+        )
+
     async def play(self, color: str, vertex: tuple[int, int] | None) -> None:
         """落子。color 为 'B'/'W'，vertex 为 None 表示 pass。"""
         coord = "pass" if vertex is None else vertex_to_gtp(vertex, self.board_size)
@@ -161,19 +207,68 @@ class KataGoGTP:
         return gtp_to_vertex(resp, self.board_size)
 
 
-# ===== 全局单例管理 =====
+# ===== 全局单例管理（按模式区分：normal 正常模型 / human_sl Human-SL 对弈模型） =====
 
 _gtp_instance: KataGoGTP | None = None
+_gtp_mode: str | None = None
 
 
 def get_katago_gtp() -> KataGoGTP:
-    """获取全局 KataGo GTP 实例（惰性创建）。"""
-    global _gtp_instance
+    """获取全局 KataGo GTP 实例（normal 模式，惰性创建；向后兼容）。
+
+    对弈接口请使用 ensure_play_mode() 按档位模式获取。
+    """
+    global _gtp_instance, _gtp_mode
+    if _gtp_instance is None or _gtp_mode != "normal":
+        _gtp_instance = KataGoGTP(
+            binary=engine_manager.katago_binary_path(),
+            model=engine_manager.get_current_model_path(),
+            config=engine_manager.gtp_config_path(),
+        )
+        _gtp_mode = "normal"
+    return _gtp_instance
+
+
+async def ensure_play_mode(mode: str) -> KataGoGTP:
+    """确保 GTP 单例处于指定对弈模式（normal / human_sl），跨模式切换时停旧进程。
+
+    - normal：当前模型（b11c768h12）+ 默认配置，按 visits 控强度（pro 档/9路13路）
+    - human_sl：正常模型 + -human-model humanv0（官方附加模式，human_gtp.cfg），
+      按 rank profile 控强度（am20k~am7d），档位运行时 kata-set-param 动态切换
+    """
+    global _gtp_instance, _gtp_mode
+    if _gtp_instance is not None and _gtp_mode != mode:
+        await stop_katago_gtp()
     if _gtp_instance is None:
         settings = get_settings()
-        _gtp_instance = KataGoGTP(
-            binary=settings.katago_binary,
-            model=settings.katago_model,
-            config=settings.katago_config,
-        )
+        if mode == "human_sl":
+            _gtp_instance = KataGoGTP(
+                binary=engine_manager.katago_binary_path(),
+                model=engine_manager.get_current_model_path(),
+                human_model=engine_manager.get_human_sl_model_path(),
+                human_sl_profile="rank_5k",
+                config=_human_gtp_cfg_path(),
+            )
+            _gtp_mode = "human_sl"
+        else:
+            _gtp_instance = KataGoGTP(
+                binary=engine_manager.katago_binary_path(),
+                model=engine_manager.get_current_model_path(),
+                config=engine_manager.gtp_config_path(),
+            )
+            _gtp_mode = "normal"
     return _gtp_instance
+
+
+async def stop_katago_gtp() -> None:
+    """停止 GTP 引擎进程（切换模型/模式时调用，下次请求惰性重启）。"""
+    global _gtp_instance, _gtp_mode
+    if _gtp_instance is not None:
+        await _gtp_instance.stop()
+    _gtp_instance = None
+    _gtp_mode = None
+
+
+def is_any_gtp_running() -> bool:
+    """当前是否有任意模式的 GTP 实例在运行（控制面板状态用）。"""
+    return _gtp_instance is not None and _gtp_instance.is_running

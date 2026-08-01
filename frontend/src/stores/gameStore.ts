@@ -21,8 +21,8 @@ import type {
   Vertex,
 } from '../lib/types'
 import { getCurrentEngine } from '../engines/manager'
-import { recommendVisits } from '../engines/benchmark'
 import { useSettingsStore } from './settingsStore'
+import { aiVisitsFor, type AIStrengthId } from '../lib/strength'
 import { saveGame } from '../lib/db'
 
 /** 连续 pass 两次视为终局 */
@@ -34,6 +34,8 @@ export interface NewGameOpts {
   aiColor?: Player
   maxVisits?: number
   komi?: number
+  /** 本局 AI 强度等级（临时覆盖全局设置；不传则用全局默认） */
+  aiStrength?: AIStrengthId | null
 }
 
 interface GameState {
@@ -51,6 +53,8 @@ interface GameState {
   aiColor: Player
   komi: number
   maxVisits: number
+  /** 本局 AI 强度等级（null = 用全局设置） */
+  aiStrength: AIStrengthId | null
   aiError: string | null
 
   newGame: (opts?: NewGameOpts) => void
@@ -58,6 +62,8 @@ interface GameState {
   pass: () => void
   resign: () => void
   undo: () => void
+  /** 对局结束后重置：清空棋盘与着法，回到未开始（idle）状态，保留设置表单 */
+  resetToSetup: () => void
   requestAiMove: () => Promise<void>
   clearAiError: () => void
 }
@@ -141,6 +147,7 @@ export const useGameStore = create<GameState>((set, get) => {
     aiColor: -1,
     komi: 7.5,
     maxVisits: 100,
+    aiStrength: null,
     aiError: null,
 
     newGame: (opts) => {
@@ -158,6 +165,7 @@ export const useGameStore = create<GameState>((set, get) => {
         aiColor: opts?.aiColor ?? -1,
         komi: opts?.komi ?? 7.5,
         maxVisits: opts?.maxVisits ?? 100,
+        aiStrength: opts?.aiStrength ?? null,
         aiError: null,
       })
     },
@@ -219,6 +227,21 @@ export const useGameStore = create<GameState>((set, get) => {
       })
     },
 
+    resetToSetup: () => {
+      const { boardSize } = get()
+      set({
+        boardSize,
+        board: emptyBoard(boardSize),
+        currentPlayer: 1,
+        moves: [],
+        status: 'idle',
+        result: null,
+        lastMove: null,
+        history: [],
+        aiError: null,
+      })
+    },
+
     requestAiMove: async () => {
       const s = get()
       if (s.status !== 'playing' || s.currentPlayer !== s.aiColor) return
@@ -233,12 +256,16 @@ export const useGameStore = create<GameState>((set, get) => {
         return
       }
 
-      // 自适应 maxVisits（若用户未手动覆盖）
-      const { benchmarkScore, aiStrength } = useSettingsStore.getState()
+      // 自适应 maxVisits（棋力轴：等级倍率 × 模型棋力系数；本局等级优先，未指定默认业余 1 段）
+      const settings = useSettingsStore.getState()
+      const strengthId = s.aiStrength ?? 'am1d'
+      const bScore =
+        settings.engineSource === 'local'
+          ? settings.localBenchmarkScore
+          : settings.wasmBenchmarkScore
       let visits = s.maxVisits
-      if (benchmarkScore > 0) {
-        const ratio = aiStrength === 'fast' ? 0.5 : aiStrength === 'strong' ? 2 : 1
-        visits = Math.round(recommendVisits(benchmarkScore, 'move') * ratio)
+      if (bScore > 0) {
+        visits = aiVisitsFor(strengthId, 'move', engine.getInfo().model)
       }
 
       const engineMoves: [string, [number, number] | null][] = s.moves.map((m) => [
@@ -247,6 +274,8 @@ export const useGameStore = create<GameState>((set, get) => {
       ])
 
       try {
+        // 引擎模式统一入口：Local 按档位决定 Human-SL/visits，WASM no-op
+        engine.setStrength(s.aiStrength ?? null)
         const resp = await engine.genmove(
           s.aiColor,
           s.boardSize,

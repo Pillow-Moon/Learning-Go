@@ -1,9 +1,8 @@
 """健康检查接口。"""
-from pathlib import Path
-
 from fastapi import APIRouter
 
 from app.core.config import get_settings
+from app.services import engine_manager
 
 router = APIRouter(tags=["health"])
 
@@ -11,11 +10,13 @@ router = APIRouter(tags=["health"])
 @router.get("/health")
 def health_check() -> dict:
     settings = get_settings()
-    # 从模型路径提取版本标识（如 b10c384h6）
-    model_stem = Path(settings.katago_model).stem  # e.g. b10c384h6
     return {
         "status": "ok",
         "app": settings.app_name,
         "debug": settings.debug,
-        "katago_model": model_stem,
+        # 运行时当前模型（切换后立即反映），而非配置文件里的默认值
+        "katago_model": engine_manager.get_effective_model_id(),
+        # 手机端配置 localBackendURL 用：局域网 IP 列表 + Tailscale 100.x 地址
+        "lan_ips": engine_manager.get_lan_ips(),
+        "tailscale_ip": engine_manager.get_tailscale_ip(),
     }
