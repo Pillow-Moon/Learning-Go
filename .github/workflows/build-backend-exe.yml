@@ -45,8 +45,26 @@ jobs:
       - name: Download models (b11c768h12 + humanv0)
         shell: pwsh
         run: |
-          Invoke-WebRequest -Uri "https://github.com/lightvector/KataGo/releases/download/v1.17.0/b11c768h12nbt3tflrs-fson-silu.bin.gz" -OutFile "backend\katago\models\b11c768h12.bin.gz" -UseBasicParsing
-          Invoke-WebRequest -Uri "https://github.com/lightvector/KataGo/releases/download/v1.15.0/b18c384nbt-humanv0.bin.gz" -OutFile "backend\katago\models\b18c384nbt-humanv0.bin.gz" -UseBasicParsing
+          $models = @(
+            @{ url = "https://github.com/lightvector/KataGo/releases/download/v1.17.0/b11c768h12nbt3tflrs-fson-silu.bin.gz"; out = "backend\katago\models\b11c768h12.bin.gz" },
+            @{ url = "https://github.com/lightvector/KataGo/releases/download/v1.15.0/b18c384nbt-humanv0.bin.gz"; out = "backend\katago\models\b18c384nbt-humanv0.bin.gz" }
+          )
+          foreach ($m in $models) {
+            # 大文件（约 200~400MB）下载易因网络波动中断：curl 重试 + 大小校验
+            $ok = $false
+            for ($i = 1; $i -le 3 -and -not $ok; $i++) {
+              if (Test-Path $m.out) { Remove-Item $m.out -Force }
+              curl.exe -L --fail --retry 3 --retry-delay 5 --connect-timeout 30 -o $m.out $m.url
+              if ($LASTEXITCODE -eq 0 -and (Test-Path $m.out) -and (Get-Item $m.out).Length -gt 1MB) {
+                $ok = $true
+              } else {
+                Write-Host "模型下载失败，重试 $i/3: $($m.out)"
+                Start-Sleep -Seconds 10
+              }
+            }
+            if (-not $ok) { throw "模型下载失败: $($m.out)" }
+            Write-Host "已下载 $(Get-Item $m.out).Length bytes -> $($m.out)"
+          }
           Get-ChildItem backend\katago\models | Select-Object Name, Length
 
       - name: Build with PyInstaller (onedir)
