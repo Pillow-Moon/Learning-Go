@@ -329,6 +329,62 @@ export default function CommentaryPanel({ onHighlight, showOwnershipEnabled, onT
         </div>
       )}
 
+      {/* 推荐落子（星阵式：推荐度 = policy / 目差 = 该点落子后领先 / 胜率分黑白）
+          随分析中间快照实时更新，点击行在棋盘高亮变化图 */}
+      {candidates && candidates.length > 0 && (
+        <div className="recommend-list">
+          <div className="recommend-title">
+            <span className="info-label">推荐落子{analyzing ? '（搜索中）' : ''}</span>
+            {analyzing && candidates[0]?.visits != null && (
+              <span className="hint">已分析 {candidates[0].visits} visits</span>
+            )}
+          </div>
+          <table className="recommend-table">
+            <thead>
+              <tr>
+                <th>落点</th>
+                <th>推荐度</th>
+                <th>目差</th>
+                <th>胜率</th>
+              </tr>
+            </thead>
+            <tbody>
+              {candidates.slice(0, 5).map((c, i) => {
+                // 候选点 winrate/scoreLead 为「当前玩家视角」，换算为黑白双方
+                const blackWr =
+                  c.winrate != null
+                    ? currentPlayer === 1
+                      ? c.winrate
+                      : 1 - c.winrate
+                    : null
+                const whiteWr = blackWr != null ? 1 - blackWr : null
+                const lead = c.scoreLead
+                return (
+                  <tr
+                    key={i}
+                    className={c.pv.length > 0 ? 'clickable' : ''}
+                    onClick={() => c.pv.length > 0 && onHighlight(c.pv)}
+                  >
+                    <td>
+                      {i + 1}. {c.move ? vertexToCoord(c.move, boardSize) : 'pass'}
+                    </td>
+                    <td>{c.prior != null ? `${(c.prior * 100).toFixed(1)}%` : '—'}</td>
+                    <td className={lead != null ? (lead >= 0 ? 'lead-pos' : 'lead-neg') : ''}>
+                      {lead != null ? `${lead >= 0 ? '+' : ''}${lead.toFixed(1)}` : '—'}
+                    </td>
+                    <td>
+                      {blackWr != null
+                        ? `黑 ${(blackWr * 100).toFixed(1)}% / 白 ${(whiteWr! * 100).toFixed(1)}%`
+                        : '—'}
+                    </td>
+                  </tr>
+                )
+              })}
+            </tbody>
+          </table>
+        </div>
+      )}
+
       {!candidates && (
         <p className="hint">提示：先点「分析局面」可获得更精准的解说</p>
       )}

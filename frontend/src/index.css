@@ -589,6 +589,58 @@ button:disabled {
   border-color: var(--primary);
 }
 
+/* ===== 推荐落子列表（星阵式） ===== */
+.recommend-list {
+  margin-top: 12px;
+}
+
+.recommend-title {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  margin-bottom: 6px;
+}
+
+.recommend-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 13px;
+}
+
+.recommend-table th,
+.recommend-table td {
+  padding: 4px 6px;
+  text-align: left;
+  border-bottom: 1px solid var(--border);
+  white-space: nowrap;
+}
+
+.recommend-table th {
+  color: var(--text-muted);
+  font-weight: 500;
+  font-size: 12px;
+}
+
+.recommend-table td:first-child {
+  font-weight: 600;
+}
+
+.recommend-table tr.clickable {
+  cursor: pointer;
+}
+
+.recommend-table tr.clickable:hover td {
+  background: var(--hover, rgba(128, 128, 128, 0.08));
+}
+
+.recommend-table .lead-pos {
+  color: var(--win, #1a8f4c);
+}
+
+.recommend-table .lead-neg {
+  color: var(--lose, #c23a3a);
+}
+
 /* ===== 解说面板 ===== */
 .commentary-panel {
   background: var(--surface);

@@ -16,7 +16,7 @@ type SideTab = 'game' | 'commentary'
 export default function PlayPage() {
   const { board, boardSize, currentPlayer, lastMove, status, moves, playMove, komi, maxVisits } =
     useGameStore()
-  const { candidates, ownership, analyzedMoveCount, analyze, clear } = useAnalysisStore()
+  const { candidates, ownership, analyzedMoveCount, analyzing, analyze, clear } = useAnalysisStore()
   const [highlightPv, setHighlightPv] = useState<Vertex[] | null>(null)
   const [activeTab, setActiveTab] = useState<SideTab>('game')
   // 领地显示开关（仿星阵：按一下显示地盘渐变、再按关闭；默认关闭）
@@ -38,7 +38,9 @@ export default function PlayPage() {
     }
   }, [status])
 
-  const showCandidates = analyzedMoveCount === moves.length ? candidates : null
+  // 候选点实时显示：分析中（中间快照）即可见，完成落地终态；过期（局面已变）隐藏
+  const showCandidates =
+    analyzedMoveCount === moves.length || analyzing ? candidates : null
   const showOwnership = showOwnershipEnabled ? ownership : null
 
   /** 领地开关：当前局面无分析结果时先触发分析（获取地盘预测），完成后自动显示 */
