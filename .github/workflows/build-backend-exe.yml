@@ -37,10 +37,11 @@ jobs:
             Invoke-WebRequest -Uri "https://github.com/lightvector/KataGo/releases/download/v1.17.0/katago-v1.17.0-eigenavx2-windows-x64.zip" -OutFile $zip -UseBasicParsing
           }
           Expand-Archive $zip -DestinationPath "$env:TEMP\katago-extract" -Force
-          Get-ChildItem "$env:TEMP\katago-extract" -Recurse -Filter katago.exe | Select-Object -First 1 | ForEach-Object {
-            Move-Item $_.FullName "backend\katago\katago.exe" -Force
+          # 复制 katago.exe 与运行依赖 dll（spec 打包 katago/*.dll）
+          Get-ChildItem "$env:TEMP\katago-extract" -Recurse -File | Where-Object { $_.Name -eq 'katago.exe' -or $_.Extension -eq '.dll' } | ForEach-Object {
+            Copy-Item $_.FullName "backend\katago\" -Force
           }
-          Get-Item backend\katago\katago.exe | Select-Object Name, Length
+          Get-ChildItem backend\katago | Where-Object { $_.Name -eq 'katago.exe' -or $_.Extension -eq '.dll' } | Select-Object Name, Length
 
       - name: Download models (b11c768h12 + humanv0)
         shell: pwsh

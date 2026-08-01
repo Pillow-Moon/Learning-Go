@@ -10,23 +10,33 @@
 - b11c768h12（分析/正常对弈）+ b18c384nbt-humanv0（Human-SL 对弈）
 - shared/ai-strength.json（强度参数单一来源）
 """
+import os
+
 from PyInstaller.utils.hooks import collect_all
 
 # pydantic v2 为 Rust 扩展，需 collect_all 收集二进制与隐藏导入
 _datas, _binaries, _hiddenimports = collect_all("pydantic")
+
+# 本机 OpenCL 调优文件（绿色包 CI 构建时无 GPU，不存在则跳过；
+# 缺失时引擎首次启动会自动 autotune，耗时数分钟）
+_tune_datas = (
+    [("katago/KataGoData/opencltuning/*.txt", "katago/KataGoData/opencltuning")]
+    if os.path.exists("katago/KataGoData/opencltuning")
+    else []
+)
 
 a = Analysis(
     ["app/main.py"],
     pathex=["."],
     binaries=_binaries,
     datas=_datas
+    + _tune_datas
     + [
         ("katago/human_gtp.cfg", "katago"),
         ("katago/katago_gtp.cfg", "katago"),
         ("katago/katago_analysis.cfg", "katago"),
         ("katago/katago.exe", "katago"),
         ("katago/*.dll", "katago"),  # katago.exe 运行依赖（OpenCL/压缩/运行时库）
-        ("katago/KataGoData/opencltuning/*.txt", "katago/KataGoData/opencltuning"),  # OpenCL tune（避免首次 autotune 数分钟）
         ("katago/models/b11c768h12.bin.gz", "models"),
         ("katago/models/b18c384nbt-humanv0.bin.gz", "models"),
         ("../shared/ai-strength.json", "shared"),

@@ -31,6 +31,7 @@ backend/katago/*
 # 仅保留项目自定义配置
 !backend/katago/katago_gtp.cfg
 !backend/katago/katago_analysis.cfg
+!backend/katago/human_gtp.cfg
 
 # ===== Node / 前端 =====
 node_modules/
