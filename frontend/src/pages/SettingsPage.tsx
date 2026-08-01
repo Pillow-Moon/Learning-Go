@@ -569,13 +569,6 @@ export default function SettingsPage() {
             action={
               <div>
                 <div className="card-btn-row">
-                  <a
-                    href={`${import.meta.env.BASE_URL}setup-windows.bat`}
-                    download
-                    className="btn primary small card-btn"
-                  >
-                    下载启动器
-                  </a>
                   <button
                     className="btn small card-btn"
                     disabled={!engineStatus.local.ready || localBenchmarking}
