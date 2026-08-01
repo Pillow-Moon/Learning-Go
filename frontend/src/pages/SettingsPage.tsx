@@ -569,6 +569,15 @@ export default function SettingsPage() {
             action={
               <div>
                 <div className="card-btn-row">
+                  <a
+                    className="btn primary small card-btn"
+                    href={`https://github.com/${window.location.hostname.split('.')[0]}/Learning-Go/releases/latest`}
+                    target="_blank"
+                    rel="noreferrer"
+                    title="下载桌面引擎（绿色包，免安装，无需 Python 环境，解压即用）"
+                  >
+                    下载桌面引擎
+                  </a>
                   <button
                     className="btn small card-btn"
                     disabled={!engineStatus.local.ready || localBenchmarking}
@@ -688,18 +697,6 @@ export default function SettingsPage() {
                 {modelSwitchMsg}
               </p>
             )}
-            <div style={{ marginTop: 12, display: 'flex', gap: 8, alignItems: 'center' }}>
-              {/* GitHub Pages 部署时 hostname 形如 <owner>.github.io；本地开发此链接无效仅提示 */}
-              <a
-                className="btn small"
-                href={`https://github.com/${window.location.hostname.split('.')[0]}/Learning-Go/releases/latest`}
-                target="_blank"
-                rel="noreferrer"
-              >
-                下载桌面引擎（绿色包，免安装）
-              </a>
-              <span className="hint-sm">无需 Python 环境，解压即用</span>
-            </div>
             <div className="remote-connect" style={{ marginTop: 12 }}>
               <h3 style={{ fontSize: 14, marginBottom: 6 }}>远程连接（手机端）</h3>
               <p className="hint-sm">
