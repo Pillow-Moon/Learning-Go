@@ -329,7 +329,7 @@ export default function CommentaryPanel({ onHighlight, showOwnershipEnabled, onT
         </div>
       )}
 
-      {/* 推荐落子（星阵式：推荐度 = policy / 目差 = 该点落子后领先 / 胜率分黑白）
+      {/* 推荐落子（星阵式：推荐度 = 相对最佳着法的胜率比 / 目差 = 该点落子后领先 / 胜率分黑白）
           随分析中间快照实时更新，点击行在棋盘高亮变化图 */}
       {candidates && candidates.length > 0 && (
         <div className="recommend-list">
@@ -343,7 +343,7 @@ export default function CommentaryPanel({ onHighlight, showOwnershipEnabled, onT
             <thead>
               <tr>
                 <th>落点</th>
-                <th>推荐度</th>
+                <th title="相对最佳着法的胜率比（榜首 100%）">推荐度</th>
                 <th>目差</th>
                 <th>胜率</th>
               </tr>
@@ -359,6 +359,13 @@ export default function CommentaryPanel({ onHighlight, showOwnershipEnabled, onT
                     : null
                 const whiteWr = blackWr != null ? 1 - blackWr : null
                 const lead = c.scoreLead
+                // 推荐度 = 相对榜首胜率比：与胜率排序严格一致（policy 是先验棋感，
+                // 与搜索后验胜率可能不同序，不宜直接作推荐度）
+                const topWinrate = candidates[0]?.winrate ?? null
+                const rec =
+                  c.winrate != null && topWinrate != null && topWinrate > 0
+                    ? Math.round((c.winrate / topWinrate) * 100)
+                    : null
                 return (
                   <tr
                     key={i}
@@ -368,7 +375,7 @@ export default function CommentaryPanel({ onHighlight, showOwnershipEnabled, onT
                     <td>
                       {i + 1}. {c.move ? vertexToCoord(c.move, boardSize) : 'pass'}
                     </td>
-                    <td>{c.prior != null ? `${(c.prior * 100).toFixed(1)}%` : '—'}</td>
+                    <td>{rec != null ? `${rec}%` : '—'}</td>
                     <td className={lead != null ? (lead >= 0 ? 'lead-pos' : 'lead-neg') : ''}>
                       {lead != null ? `${lead >= 0 ? '+' : ''}${lead.toFixed(1)}` : '—'}
                     </td>
