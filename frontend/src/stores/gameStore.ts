@@ -22,6 +22,7 @@ import type {
 } from '../lib/types'
 import { getCurrentEngine } from '../engines/manager'
 import { useSettingsStore } from './settingsStore'
+import { useAnalysisStore } from './analysisStore'
 import { aiVisitsFor, type AIStrengthId } from '../lib/strength'
 import { saveGame } from '../lib/db'
 
@@ -246,6 +247,9 @@ export const useGameStore = create<GameState>((set, get) => {
       const s = get()
       if (s.status !== 'playing' || s.currentPlayer !== s.aiColor) return
       set({ status: 'waiting_ai', aiError: null })
+
+      // AI 落子优先：取消排队中的局面分析（WASM 串行队列，避免分析阻塞落子）
+      useAnalysisStore.getState().stopAnalysis()
 
       const engine = getCurrentEngine()
       if (!engine.isReady()) {

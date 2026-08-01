@@ -40,6 +40,7 @@ export default function CommentaryPanel({ onHighlight }: Props) {
     error: analysisError,
     analyzedMoveCount,
     analyze,
+    stopAnalysis,
     clear,
   } = useAnalysisStore()
   const { text, streaming, error, history, request } = useCommentaryStore()
@@ -259,8 +260,13 @@ export default function CommentaryPanel({ onHighlight }: Props) {
           onClick={handleAnalyze}
           disabled={analyzing || status === 'idle'}
         >
-          {analyzing ? '分析中…' : '分析局面'}
+          分析局面
         </button>
+        {analyzing && (
+          <button className="btn" onClick={stopAnalysis}>
+            停止分析
+          </button>
+        )}
         <button
           className="btn primary"
           onClick={handleRequest}

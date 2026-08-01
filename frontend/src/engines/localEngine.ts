@@ -256,6 +256,10 @@ export class LocalEngine implements GoEngine {
     this.ready = false
   }
 
+  cancelAnalysis(): void {
+    // Local 分析走后端独立任务（/analysis 任务表 + 轮询），不阻塞对弈落子，无需取消
+  }
+
   setStrength(strengthId: AIStrengthId | null): void {
     // 后端按 strength_id 决定模式：Human-SL 档位（am20k~am7d）切 rank，pro 档走 visits
     this.strengthId = strengthId

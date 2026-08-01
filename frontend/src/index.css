@@ -222,22 +222,6 @@ button:disabled {
   box-shadow: var(--shadow);
 }
 
-/* 棋盘工具条（仿星阵：领地等显示开关按钮组，悬浮于棋盘左上角） */
-.board-toolbar {
-  position: absolute;
-  top: 8px;
-  left: 8px;
-  z-index: 5;
-  display: flex;
-  gap: 6px;
-}
-
-.board-toolbar .btn.active {
-  background: var(--primary);
-  color: #fff;
-  border-color: var(--primary);
-}
-
 /* ===== 右侧选项卡面板（宽度由 grid 列决定，高度与棋盘一致） ===== */
 .side-panels {
   min-width: 0;
@@ -261,6 +245,20 @@ button:disabled {
   display: flex;
   border-bottom: 1px solid var(--border);
   flex-shrink: 0;
+}
+
+/* 领地开关（选项卡栏右侧） */
+.side-tabbar .territory-toggle {
+  flex: 0 0 auto;
+  margin: 7px 8px 7px 4px;
+  padding: 5px 12px;
+  align-self: center;
+}
+
+.side-tabbar .territory-toggle.active {
+  background: var(--primary);
+  color: #fff;
+  border-color: var(--primary);
 }
 
 .side-tab {

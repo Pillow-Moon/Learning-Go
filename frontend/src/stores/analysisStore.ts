@@ -26,8 +26,17 @@ interface AnalysisState {
     komi: number
     maxVisits: number
   }) => Promise<void>
+  /** 停止当前分析（WASM：取消排队中的分析并忽略进行中结果，避免阻塞 AI 落子） */
+  stopAnalysis: () => void
   clear: () => void
 }
+
+/**
+ * WASM 单线程 + 串行队列：单次分析搜索量上限。
+ * 超出后分析耗时数分钟，会阻塞对弈落子（genmove 在 worker 队列中排队）。
+ * 500 visits 约 17~40s（19 路 @15~30 v/s）+ 重建 3~5s，教学参考足够。
+ */
+const ANALYSIS_MAX_VISITS_WASM = 500
 
 export const useAnalysisStore = create<AnalysisState>((set) => ({
   candidates: null,
@@ -65,7 +74,12 @@ export const useAnalysisStore = create<AnalysisState>((set) => ({
         bScore,
         'analysis',
       )
-      const visits = aiVisitsFor(maxStrength, 'analysis', engineModel)
+      const rawVisits = aiVisitsFor(maxStrength, 'analysis', engineModel)
+      // WASM 限制单次分析搜索量（串行队列会阻塞对弈落子，见 ANALYSIS_MAX_VISITS_WASM）
+      const visits =
+        engineSource === 'browser'
+          ? Math.min(rawVisits, ANALYSIS_MAX_VISITS_WASM)
+          : rawVisits
 
       const engineMoves: [string, [number, number] | null][] = moves.map((m) => [
         m.color,
@@ -135,11 +149,21 @@ export const useAnalysisStore = create<AnalysisState>((set) => ({
         clearTimeout(pendingTimer)
         pendingTimer = null
       }
+      // 主动取消（stopAnalysis / AI 落子前自动停止）：不视为错误
+      if (err instanceof Error && err.name === 'AbortError') {
+        set({ analyzing: false })
+        return
+      }
       set({
         analyzing: false,
         error: err instanceof Error ? err.message : '分析失败',
       })
     }
+  },
+
+  stopAnalysis: () => {
+    getCurrentEngine().cancelAnalysis()
+    set({ analyzing: false })
   },
 
   clear: () =>

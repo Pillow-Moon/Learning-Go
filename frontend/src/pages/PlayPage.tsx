@@ -14,9 +14,9 @@ import type { Vertex } from '../lib/types'
 type SideTab = 'game' | 'commentary'
 
 export default function PlayPage() {
-  const { board, boardSize, currentPlayer, lastMove, status, moves, playMove } =
+  const { board, boardSize, currentPlayer, lastMove, status, moves, playMove, komi, maxVisits } =
     useGameStore()
-  const { candidates, ownership, analyzedMoveCount, clear } = useAnalysisStore()
+  const { candidates, ownership, analyzedMoveCount, analyze, clear } = useAnalysisStore()
   const [highlightPv, setHighlightPv] = useState<Vertex[] | null>(null)
   const [activeTab, setActiveTab] = useState<SideTab>('game')
   // 领地显示开关（仿星阵：按一下显示地盘渐变、再按关闭；默认关闭）
@@ -39,22 +39,27 @@ export default function PlayPage() {
   }, [status])
 
   const showCandidates = analyzedMoveCount === moves.length ? candidates : null
-  const showOwnership =
-    showOwnershipEnabled && analyzedMoveCount === moves.length ? ownership : null
+  const showOwnership = showOwnershipEnabled ? ownership : null
+
+  /** 领地开关：当前局面无分析结果时先触发分析（获取地盘预测），完成后自动显示 */
+  const handleTerritoryToggle = () => {
+    if (status === 'idle') return
+    if (analyzedMoveCount !== moves.length) {
+      setShowOwnershipEnabled(true)
+      clear()
+      const engineMoves = moves.map((m) => ({
+        color: m.color === 1 ? 'B' : 'W',
+        vertex: m.vertex,
+      }))
+      void analyze({ moves: engineMoves, boardSize, komi, maxVisits })
+    } else {
+      setShowOwnershipEnabled((v) => !v)
+    }
+  }
 
   return (
     <div className="play-page">
       <div className="board-area">
-        <div className="board-toolbar">
-          <button
-            className={`btn small${showOwnershipEnabled ? ' active' : ''}`}
-            onClick={() => setShowOwnershipEnabled((v) => !v)}
-            disabled={analyzedMoveCount !== moves.length}
-            title="显示/隐藏 AI 地盘预测（需要先触发局面分析）"
-          >
-            领地
-          </button>
-        </div>
         <GoBoardCanvas
           board={board}
           boardSize={boardSize}
@@ -85,6 +90,14 @@ export default function PlayPage() {
               onClick={() => setActiveTab('commentary')}
             >
               AI 解说
+            </button>
+            <button
+              className={`btn small territory-toggle${showOwnershipEnabled ? ' active' : ''}`}
+              onClick={handleTerritoryToggle}
+              disabled={status === 'idle'}
+              title="显示/隐藏 AI 地盘预测（无分析结果时自动触发分析）"
+            >
+              领地
             </button>
           </div>
           {activeTab === 'game' ? (

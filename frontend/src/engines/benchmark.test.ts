@@ -43,6 +43,7 @@ class FakeEngine implements GoEngine {
     return { vertex: null, coord: null }
   }
   setStrength(): void {}
+  cancelAnalysis(): void {}
   destroy(): void {}
 }
 

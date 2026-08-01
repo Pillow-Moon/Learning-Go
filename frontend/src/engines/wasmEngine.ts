@@ -111,6 +111,8 @@ export class WasmEngine implements GoEngine {
       reject: (e: Error) => void
       onSnapshot?: (result: AnalysisResult) => void
       boardSize: number
+      /** 对弈落子（urgent）：不受 cancel 影响，worker 队列中插队执行 */
+      urgent: boolean
     }
   >()
   private requestId = 0
@@ -287,6 +289,24 @@ export class WasmEngine implements GoEngine {
     },
     onSnapshot?: (result: AnalysisResult) => void,
   ): Promise<AnalysisResult> {
+    return this.analyzeInternal(query, onSnapshot, false)
+  }
+
+  /**
+   * 分析内部实现：urgent=true 表示对弈落子（worker 队列插队、不受取消影响），
+   * 保证 AI 应手不被排队的局面分析阻塞。
+   */
+  private async analyzeInternal(
+    query: {
+      boardSize: number
+      komi: number
+      maxVisits: number
+      maxTime?: number
+      moves: [string, [number, number] | null][]
+    },
+    onSnapshot: ((result: AnalysisResult) => void) | undefined,
+    urgent: boolean,
+  ): Promise<AnalysisResult> {
     this.ensureReady()
     const id = String(++this.requestId)
 
@@ -329,9 +349,30 @@ export class WasmEngine implements GoEngine {
         reject,
         onSnapshot,
         boardSize: query.boardSize,
+        urgent,
       })
-      this.worker!.postMessage({ type: 'analyze', id, query: wasmQuery })
+      this.worker!.postMessage({ type: 'analyze', id, query: wasmQuery, urgent })
     })
+  }
+
+  /**
+   * 取消排队中的局面分析（非 urgent）：
+   * - worker 队列中未开始的分析被跳过；
+   * - 正在运行的分析无法中断（单次 callMain 架构限制），其结果返回时
+   *   pendingRequests 已移除 → 自动忽略；
+   * - 对弈落子（urgent）不受影响。
+   * 供「停止分析」按钮与 AI 落子前调用。
+   */
+  cancelAnalysis(): void {
+    this.worker?.postMessage({ type: 'cancel' })
+    const aborted = new Error('分析已取消')
+    aborted.name = 'AbortError'
+    for (const [id, p] of this.pendingRequests) {
+      if (!p.urgent) {
+        this.pendingRequests.delete(id)
+        p.reject(aborted)
+      }
+    }
   }
 
   /** 将 KataGo 分析引擎响应解析为 AnalysisResult */
@@ -405,13 +446,17 @@ export class WasmEngine implements GoEngine {
     const effectiveVisits = injecting
       ? Math.min(maxVisits, INJECTION_MAX_VISITS)
       : maxVisits
-    const result = await this.analyze({
-      boardSize,
-      komi,
-      maxVisits: effectiveVisits,
-      maxTime: injecting ? INJECTION_MAX_TIME : undefined,
-      moves,
-    })
+    const result = await this.analyzeInternal(
+      {
+        boardSize,
+        komi,
+        maxVisits: effectiveVisits,
+        maxTime: injecting ? INJECTION_MAX_TIME : undefined,
+        moves,
+      },
+      undefined,
+      true, // 对弈落子：worker 队列插队，不被排队的局面分析阻塞
+    )
     console.log('[WasmEngine] genmove 分析完成, candidates:', result.candidates.length)
 
     if (injecting && result.policy && result.policy.length > 0) {

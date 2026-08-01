@@ -388,11 +388,46 @@ async function runAnalysis(
 }
 
 // ---------------------------------------------------------------------------
-// Message handler（串行队列）
+// Message handler（任务队列：支持取消与对弈优先插队）
 // ---------------------------------------------------------------------------
 
-/** 分析请求串行队列：同一时刻只有一个 callMain 在跑 */
-let analysisChain: Promise<unknown> = Promise.resolve()
+/**
+ * 队列任务。
+ * - urgent（对弈落子）：插入队首，且不受 cancel 影响（AI 落子优先）
+ * - normal（局面分析）：可被 cancel 取消；正在运行的无法中断（单次 callMain
+ *   架构限制），其结果会被主线程端忽略
+ */
+interface QueuedTask {
+  id: string
+  urgent: boolean
+  cancelled: boolean
+  run: () => Promise<void>
+}
+
+let taskQueue: QueuedTask[] = []
+let pumping = false
+
+/** 串行执行队列（同一时刻只有一个 callMain 在跑） */
+async function pumpQueue(): Promise<void> {
+  if (pumping) return
+  pumping = true
+  while (taskQueue.length > 0) {
+    const task = taskQueue.shift()!
+    if (task.cancelled) continue
+    try {
+      await task.run()
+    } catch {
+      // run 内部已上报错误（postMessage error），这里兜底避免队列中断
+    }
+  }
+  pumping = false
+}
+
+function enqueueTask(task: QueuedTask): void {
+  if (task.urgent) taskQueue.unshift(task)
+  else taskQueue.push(task)
+  void pumpQueue()
+}
 
 self.onmessage = async (e: MessageEvent) => {
   const { type } = e.data as {
@@ -428,24 +463,20 @@ self.onmessage = async (e: MessageEvent) => {
       modelBytes = bytes
       configBytes = new Uint8Array(configData)
 
-      // 3) 预热：真实跑一次最小查询，验证模型/配置可加载
+      // 3) 预热：真实跑一次最小查询，验证模型/配置可加载（init 阶段无并发，直接跑）
       self.postMessage({ type: 'progress', text: '引擎预热中（首次约需数秒）...' })
-      await analysisChain
-      analysisChain = analysisChain.then(() =>
-        runAnalysis(
-          {
-            id: 'warmup',
-            moves: [],
-            rules: 'chinese',
-            boardXSize: 9,
-            boardYSize: 9,
-            komi: 7.5,
-            maxVisits: 1,
-          },
-          '',
-        ),
+      await runAnalysis(
+        {
+          id: 'warmup',
+          moves: [],
+          rules: 'chinese',
+          boardXSize: 9,
+          boardYSize: 9,
+          komi: 7.5,
+          maxVisits: 1,
+        },
+        '',
       )
-      await analysisChain
       currentRequestId = null
 
       ready = true
@@ -464,9 +495,21 @@ self.onmessage = async (e: MessageEvent) => {
     return
   }
 
+  // ----- cancel：取消所有排队中的普通分析（对弈落子前调用） -----
+  if (type === 'cancel') {
+    for (const t of taskQueue) {
+      if (!t.urgent) t.cancelled = true
+    }
+    return
+  }
+
   // ----- analyze -----
   if (type === 'analyze') {
-    const msg = e.data as { id: string; query: Record<string, unknown> }
+    const msg = e.data as {
+      id: string
+      query: Record<string, unknown>
+      urgent?: boolean
+    }
 
     if (!ready || !modelBytes || !configBytes) {
       self.postMessage({
@@ -477,23 +520,25 @@ self.onmessage = async (e: MessageEvent) => {
       return
     }
 
-    // 串行队列：前一次分析（含 Module 重建）结束后再启动下一次
-    const run = analysisChain.then(async () => {
-      try {
-        const result = await runAnalysis(msg.query, msg.id)
-        self.postMessage({ type: 'result', id: msg.id, data: result })
-      } catch (err) {
-        const stderrTail = currentStderrBuf.trim().slice(-500)
-        self.postMessage({
-          type: 'error',
-          id: msg.id,
-          message:
-            fmtErr(err) + (stderrTail ? ' — 引擎输出: ' + stderrTail : ''),
-        })
-      }
+    enqueueTask({
+      id: msg.id,
+      urgent: !!msg.urgent,
+      cancelled: false,
+      run: async () => {
+        try {
+          const result = await runAnalysis(msg.query, msg.id)
+          self.postMessage({ type: 'result', id: msg.id, data: result })
+        } catch (err) {
+          const stderrTail = currentStderrBuf.trim().slice(-500)
+          self.postMessage({
+            type: 'error',
+            id: msg.id,
+            message:
+              fmtErr(err) + (stderrTail ? ' — 引擎输出: ' + stderrTail : ''),
+          })
+        }
+      },
     })
-    // 确保队列异常不会中断后续请求
-    analysisChain = run.catch(() => {})
     return
   }
 }

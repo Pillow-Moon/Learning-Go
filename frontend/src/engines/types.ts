@@ -102,6 +102,13 @@ export interface GoEngine {
    */
   setStrength(strengthId: AIStrengthId | null): void | Promise<void>
 
+  /**
+   * 取消排队中的局面分析（对弈 AI 落子前调用）：
+   * - WASM：worker 串行队列，取消未开始的普通分析并忽略进行中结果，避免阻塞落子
+   * - Local：分析走后端独立任务，不阻塞对弈，no-op
+   */
+  cancelAnalysis(): void
+
   /** 引擎是否已初始化完成 */
   isReady(): boolean
 
