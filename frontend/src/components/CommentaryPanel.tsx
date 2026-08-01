@@ -26,9 +26,13 @@ type Level = 'beginner' | 'intermediate' | 'advanced'
 
 interface Props {
   onHighlight: (vertices: Vertex[] | null) => void
+  /** 领地显示开关状态（由对弈页持有，切换选项卡不丢失） */
+  showOwnershipEnabled?: boolean
+  /** 领地开关点击（无当前局面分析时由对弈页自动触发分析） */
+  onToggleTerritory?: () => void
 }
 
-export default function CommentaryPanel({ onHighlight }: Props) {
+export default function CommentaryPanel({ onHighlight, showOwnershipEnabled, onToggleTerritory }: Props) {
   const engineSource = useSettingsStore((s) => s.engineSource)
   const { moves, board, boardSize, currentPlayer, komi, maxVisits, status } =
     useGameStore()
@@ -80,6 +84,15 @@ export default function CommentaryPanel({ onHighlight }: Props) {
         vertex: m.vertex,
       }))
     void analyze({ moves: engineMoves, boardSize, komi, maxVisits })
+  }
+
+  /** 分析/停止：分析中按钮变为「停止分析」，点击即终止 */
+  const handleAnalyzeToggle = () => {
+    if (analyzing) {
+      stopAnalysis()
+    } else {
+      handleAnalyze()
+    }
   }
 
   /** 生成 ASCII 棋盘图（X=黑 O=白 .=空，数字=候选点），让 LLM 直接"看到"真实布局 */
@@ -257,14 +270,19 @@ export default function CommentaryPanel({ onHighlight }: Props) {
       <div className="commentary-actions">
         <button
           className="btn"
-          onClick={handleAnalyze}
-          disabled={analyzing || status === 'idle'}
+          onClick={handleAnalyzeToggle}
+          disabled={status === 'idle'}
         >
-          分析局面
+          {analyzing ? '停止分析' : '分析局面'}
         </button>
-        {analyzing && (
-          <button className="btn" onClick={stopAnalysis}>
-            停止分析
+        {onToggleTerritory && (
+          <button
+            className={`btn${showOwnershipEnabled ? ' active' : ''}`}
+            onClick={onToggleTerritory}
+            disabled={status === 'idle'}
+            title="显示/隐藏 AI 地盘预测（无分析结果时自动触发分析）"
+          >
+            领地
           </button>
         )}
         <button

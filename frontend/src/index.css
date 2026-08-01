@@ -247,20 +247,6 @@ button:disabled {
   flex-shrink: 0;
 }
 
-/* 领地开关（选项卡栏右侧） */
-.side-tabbar .territory-toggle {
-  flex: 0 0 auto;
-  margin: 7px 8px 7px 4px;
-  padding: 5px 12px;
-  align-self: center;
-}
-
-.side-tabbar .territory-toggle.active {
-  background: var(--primary);
-  color: #fff;
-  border-color: var(--primary);
-}
-
 .side-tab {
   flex: 1;
   padding: 11px 8px;
@@ -594,6 +580,13 @@ button:disabled {
 
 .commentary-actions .btn {
   flex: 1;
+}
+
+/* 领地开关（分析操作区）：开启时高亮 */
+.commentary-actions .btn.active {
+  background: var(--primary);
+  color: #fff;
+  border-color: var(--primary);
 }
 
 /* ===== 解说面板 ===== */

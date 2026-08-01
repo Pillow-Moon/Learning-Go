@@ -91,19 +91,15 @@ export default function PlayPage() {
             >
               AI 解说
             </button>
-            <button
-              className={`btn small territory-toggle${showOwnershipEnabled ? ' active' : ''}`}
-              onClick={handleTerritoryToggle}
-              disabled={status === 'idle'}
-              title="显示/隐藏 AI 地盘预测（无分析结果时自动触发分析）"
-            >
-              领地
-            </button>
           </div>
           {activeTab === 'game' ? (
             <GameControls />
           ) : (
-            <CommentaryPanel onHighlight={setHighlightPv} />
+            <CommentaryPanel
+              onHighlight={setHighlightPv}
+              showOwnershipEnabled={showOwnershipEnabled}
+              onToggleTerritory={handleTerritoryToggle}
+            />
           )}
         </div>
       </div>
