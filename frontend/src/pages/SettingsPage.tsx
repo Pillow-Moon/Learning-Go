@@ -1,13 +1,14 @@
 /**
- * 设置页：引擎来源选择 + 引擎状态监控 + LLM Provider 配置。
+ * 设置页：引擎来源选择 + 引擎状态监控 + 棋盘/棋子样式。
  */
 import { useEffect, useRef, useState } from 'react'
 
 import {
+  LLM_MODEL_OPTIONS,
   useSettingsStore,
-  type LLMProvider,
   type WasmModelId,
 } from '../stores/settingsStore'
+import { testLLMConnection } from '../lib/llm'
 import {
   BOARD_THEMES,
   STONE_STYLES,
@@ -17,11 +18,6 @@ import {
   type StoneStyleId,
 } from '../lib/boardThemes'
 import { drawStone } from '../components/GoBoardCanvas'
-import {
-  PROVIDER_PRESETS,
-  getPreset,
-} from '../services/llmProviders'
-import { testConnection } from '../services/llmClient'
 import { initEngine } from '../engines/manager'
 import { wasmEngine } from '../engines/wasmEngine'
 import { localEngine } from '../engines/localEngine'
@@ -161,22 +157,24 @@ function EngineCard({
 export default function SettingsPage() {
   const {
     engineSource,
-    providers,
-    activeProviderId,
     localBenchmarkScore,
     wasmBenchmarkScore,
     wasmBenchmarkByModel,
     boardTheme,
     stoneStyle,
+    userLevel,
+    llmApiKey,
+    llmBaseURL,
+    llmModel,
     setEngineSource,
     setLocalBenchmarkScore,
     recordWasmBenchmark,
-    addProvider,
-    updateProvider,
-    removeProvider,
-    setActiveProvider,
     setBoardTheme,
     setStoneStyle,
+    setUserLevel,
+    setLlmApiKey,
+    setLlmBaseURL,
+    setLlmModel,
   } = useSettingsStore()
 
   const engineStatus = useEngineStatus()
@@ -191,7 +189,6 @@ export default function SettingsPage() {
   const [wasmBenchmarkError, setWasmBenchmarkError] = useState<string | null>(null)
   const [showEngineHelp, setShowEngineHelp] = useState(false)
   const [localModels, setLocalModels] = useState<LocalModelInfo>({ installed: [], available: [] })
-  const [humanSlReady, setHumanSlReady] = useState(false)
   const [connInfo, setConnInfo] = useState<{
     lan_ips: string[]
     tailscale_ip: string | null
@@ -203,6 +200,29 @@ export default function SettingsPage() {
   const [downloadingId, setDownloadingId] = useState<string | null>(null)
   const [downloadProgress, setDownloadProgress] = useState(0)
   const [downloadMsg, setDownloadMsg] = useState<string | null>(null)
+  const [llmTesting, setLlmTesting] = useState(false)
+  const [llmTestMsg, setLlmTestMsg] = useState<{ ok: boolean; text: string } | null>(null)
+
+  /** 测试 LLM 连接（BYOK） */
+  const handleTestLLM = async () => {
+    if (!llmApiKey.trim()) {
+      setLlmTestMsg({ ok: false, text: '请先填写 API 密钥' })
+      return
+    }
+    setLlmTesting(true)
+    setLlmTestMsg(null)
+    try {
+      await testLLMConnection({ apiKey: llmApiKey, baseURL: llmBaseURL, model: llmModel })
+      setLlmTestMsg({ ok: true, text: '连接成功：密钥、接口与模型均可用' })
+    } catch (e) {
+      setLlmTestMsg({
+        ok: false,
+        text: e instanceof Error ? e.message : '连接失败',
+      })
+    } finally {
+      setLlmTesting(false)
+    }
+  }
 
   /** 拉取后端连接信息（局域网/Tailscale IP，手机远程配置用） */
   const refreshConnInfo = async () => {
@@ -243,16 +263,12 @@ export default function SettingsPage() {
     setLocalModelsError(null)
     try {
       const data = await localEngine.listModels()
-      // Human-SL 对弈引擎单独展示（不作为可切换的分析模型，避免被设为分析模型）
-      const HUMAN_SL_MODEL = 'b18c384nbt-humanv0'
-      setHumanSlReady(data.installed.some((m) => m.id === HUMAN_SL_MODEL))
       setLocalModels({
-        installed: data.installed.filter((m) => m.id !== HUMAN_SL_MODEL),
+        installed: data.installed,
         available: data.available,
       })
     } catch (e) {
       setLocalModels({ installed: [], available: [] })
-      setHumanSlReady(false)
       setLocalModelsError(
         e instanceof Error
           ? `无法获取模型列表：${e.message}（请重启后端以加载新接口）`
@@ -420,64 +436,6 @@ export default function SettingsPage() {
     } finally {
       setLoadingWasm(false)
     }
-  }
-
-  const [selectedPresetId, setSelectedPresetId] = useState('deepseek')
-  const [manualModel, setManualModel] = useState('')
-  const [manualKey, setManualKey] = useState('')
-  const [testingId, setTestingId] = useState<string | null>(null)
-  const [testResult, setTestResult] = useState<{
-    ok: boolean
-    error?: string
-  } | null>(null)
-  const [saveMsg, setSaveMsg] = useState<string | null>(null)
-  const [enableMsg, setEnableMsg] = useState<string | null>(null)
-
-  // 选中的预设
-  const preset = getPreset(selectedPresetId)
-  // 当前预设已保存的配置（用于回填表单 & 防止空 key 覆盖）
-  const savedProvider = providers.find((x) => x.id === selectedPresetId)
-
-  /** 添加/替换当前预设为 provider */
-  const handleSave = () => {
-    if (!preset) return
-    // apiKey 留空时保留已保存的 key，避免空字符串覆盖旧配置
-    const p: LLMProvider = {
-      id: preset.id,
-      name: preset.name,
-      baseURL: preset.baseURL,
-      defaultModel: preset.defaultModel,
-      model: manualModel || savedProvider?.model || preset.defaultModel,
-      apiKey: manualKey || savedProvider?.apiKey || '',
-    }
-    // 替换同 ID 的已有 provider，否则新增
-    const existing = providers.find((x) => x.id === preset.id)
-    if (existing) {
-      updateProvider(preset.id, p)
-    } else {
-      addProvider(p)
-    }
-    setActiveProvider(preset.id)
-    setSaveMsg(`已保存并启用「${preset.name}」`)
-    setEnableMsg(null)
-    setTestResult(null)
-  }
-
-  /** 测试当前 provider 连通性（CORS + API key） */
-  const handleTest = async () => {
-    if (!preset) return
-    setTestingId(preset.id)
-    setTestResult(null)
-    setSaveMsg(null)
-    setEnableMsg(null)
-    const result = await testConnection({
-      baseURL: preset.baseURL,
-      // key 留空时用已保存的 key 测试
-      apiKey: manualKey || savedProvider?.apiKey || '',
-      model: manualModel || savedProvider?.model || preset.defaultModel,
-    })
-    setTestResult(result)
-    setTestingId(null)
   }
 
   /** 切换引擎来源 */
@@ -662,9 +620,7 @@ export default function SettingsPage() {
               </select>
             </div>
             <p className="hint-sm" style={{ marginTop: 8 }}>
-              {humanSlReady
-                ? 'Human-SL 对弈引擎：已就绪（对弈档位 am20k~am7d 使用官方人类风格标尺，自动启用，无需切换模型）'
-                : 'Human-SL 对弈引擎：未安装（对弈将回退 visits 档位；请将 b18c384nbt-humanv0.bin.gz 放入 models 目录）'}
+              本地分析模型：b11c768h12（分析/解说/评估共用）。
             </p>
             {downloadingId && (
               <div className="wasm-progress" style={{ marginTop: 8 }}>
@@ -753,6 +709,84 @@ export default function SettingsPage() {
         )}
       </section>
 
+      {/* ===== AI 诊断（BYOK） ===== */}
+      <section className="settings-section">
+        <h2>AI 诊断（BYOK）</h2>
+        <p className="hint">
+          在「诊断」页生成 LLM 诊断报告使用。密钥仅保存在本机浏览器
+          （localStorage），请求直连你配置的服务商接口，不经任何中转。
+        </p>
+        <div className="settings-row">
+          <span className="settings-label">我的级位</span>
+          <input
+            type="number"
+            min={1}
+            max={25}
+            value={userLevel}
+            onChange={(e) => setUserLevel(Number(e.target.value))}
+            className="select"
+            style={{ width: 88 }}
+          />
+          <span className="hint-sm">用于死活题难度区间等训练建议（1~25，数字越小越强）</span>
+        </div>
+        <div className="settings-row">
+          <span className="settings-label">API 密钥</span>
+          <input
+            type="password"
+            value={llmApiKey}
+            onChange={(e) => setLlmApiKey(e.target.value)}
+            placeholder="sk-…（DeepSeek / OpenRouter / Groq 等）"
+            className="select"
+            style={{ width: 320 }}
+          />
+        </div>
+        <div className="settings-row">
+          <span className="settings-label">接口地址</span>
+          <input
+            type="text"
+            value={llmBaseURL}
+            onChange={(e) => setLlmBaseURL(e.target.value)}
+            placeholder="https://api.deepseek.com/v1"
+            className="select"
+            style={{ width: 320 }}
+          />
+        </div>
+        <div className="settings-row">
+          <span className="settings-label">模型</span>
+          <input
+            type="text"
+            list="llm-model-options"
+            value={llmModel}
+            onChange={(e) => setLlmModel(e.target.value)}
+            placeholder="deepseek-chat"
+            className="select"
+            style={{ width: 240 }}
+          />
+          <datalist id="llm-model-options">
+            {LLM_MODEL_OPTIONS.map((o) => (
+              <option key={o.id} value={o.id}>
+                {o.label}（{o.desc}）
+              </option>
+            ))}
+          </datalist>
+          <button
+            className="btn"
+            onClick={() => void handleTestLLM()}
+            disabled={llmTesting}
+          >
+            {llmTesting ? '测试中…' : '测试连接'}
+          </button>
+        </div>
+        {llmTestMsg && (
+          <p className="hint-sm" style={{ color: llmTestMsg.ok ? 'var(--ok, #2e7d32)' : 'var(--warning)' }}>
+            {llmTestMsg.text}
+          </p>
+        )}
+        <p className="hint-sm" style={{ marginTop: 6 }}>
+          密钥不会上传到服务器；如使用自定义服务商，请确认其为 OpenAI 兼容接口。
+        </p>
+      </section>
+
       {/* ===== 棋盘样式 ===== */}
       <section className="settings-section">
         <h2>棋盘样式</h2>
@@ -787,163 +821,6 @@ export default function SettingsPage() {
           </select>
           <StoneStyleThumb styleId={stoneStyle} />
         </div>
-      </section>
-
-      {/* ===== LLM Provider ===== */}
-      <section className="settings-section">
-        <h2>AI 解说（BYOK）</h2>
-        <p className="hint">
-          选择 LLM 服务商，填入你自己的 API Key。
-          密钥仅存储在浏览器本地，不会上传到任何服务器。
-        </p>
-
-        {/* 预设选择 */}
-        <div className="settings-row">
-          <span className="settings-label">服务商</span>
-          <select
-            value={selectedPresetId}
-            onChange={(e) => {
-              const id = e.target.value
-              setSelectedPresetId(id)
-              const saved = providers.find((x) => x.id === id)
-              setManualModel(saved?.model ?? '')
-              setManualKey('') // key 不回填明文，留空表示保留原值
-              setTestResult(null)
-              setSaveMsg(null)
-              setEnableMsg(null)
-            }}
-            className="select"
-          >
-            {PROVIDER_PRESETS.map((p) => (
-              <option key={p.id} value={p.id}>
-                {p.name}
-              </option>
-            ))}
-          </select>
-        </div>
-
-        {preset && (
-          <>
-            <p className="hint" style={{ marginTop: 8 }}>
-              {preset.description}
-              {preset.corsSupport === true && ' CORS 支持 ✓'}
-              {preset.corsSupport === false && ' CORS 不支持 ✗'}
-            </p>
-
-            <div className="settings-row">
-              <span className="settings-label">API Key</span>
-              <input
-                type="password"
-                value={manualKey}
-                onChange={(e) => setManualKey(e.target.value)}
-                placeholder="sk-..."
-                className="input"
-              />
-            </div>
-
-            <div className="settings-row">
-              <span className="settings-label">模型</span>
-              <input
-                type="text"
-                value={manualModel}
-                onChange={(e) => setManualModel(e.target.value)}
-                placeholder={preset.defaultModel}
-                className="input"
-              />
-            </div>
-
-            <div className="settings-row" style={{ gap: 10 }}>
-              <button className="btn primary" onClick={handleSave}>
-                保存
-              </button>
-              <button
-                className="btn"
-                onClick={handleTest}
-                disabled={
-                  (!manualKey && !savedProvider?.apiKey) ||
-                  testingId === preset.id
-                }
-              >
-                {testingId === preset.id ? '测试中…' : '测试连接'}
-              </button>
-            </div>
-
-            {testResult && (
-              <div
-                className={`feedback ${testResult.ok ? 'correct' : 'wrong'}`}
-              >
-                {testResult.ok
-                  ? '连接成功 ✓'
-                  : `连接失败: ${testResult.error}`}
-              </div>
-            )}
-          </>
-        )}
-
-        {/* 已保存的 providers */}
-        {providers.length > 0 && (
-          <div style={{ marginTop: 16 }}>
-            <h3>已保存的配置</h3>
-            {providers.map((p) => (
-              <div key={p.id} className="settings-row">
-                <span>
-                  {p.name}
-                  {p.id === activeProviderId ? '（当前使用）' : ''}
-                  {!p.apiKey && (
-                    <span style={{ color: 'var(--danger)', marginLeft: 6 }}>
-                      缺 API Key
-                    </span>
-                  )}
-                </span>
-                <button
-                  className="btn small"
-                  disabled={p.id === activeProviderId}
-                  onClick={() => {
-                    // 表单当前正编辑同一家且填了 key/模型时，先保存再启用，
-                    // 避免"填 key 后点启用不生效"
-                    if (selectedPresetId === p.id) {
-                      const patch: Partial<LLMProvider> = {}
-                      if (manualKey) patch.apiKey = manualKey
-                      if (manualModel) patch.model = manualModel
-                      if (Object.keys(patch).length > 0) {
-                        updateProvider(p.id, patch)
-                      }
-                    }
-                    setActiveProvider(p.id)
-                    setEnableMsg(`已启用「${p.name}」，AI 解说将使用该配置`)
-                    // 回填表单，方便查看/修改
-                    setSelectedPresetId(p.id)
-                    setManualModel(p.model)
-                    setManualKey('') // key 不回填明文，留空表示保留原值
-                    setTestResult(null)
-                  }}
-                >
-                  {p.id === activeProviderId ? '使用中' : '启用'}
-                </button>
-                <button
-                  className="btn small danger"
-                  onClick={() => {
-                    removeProvider(p.id)
-                    setEnableMsg(null)
-                  }}
-                >
-                  删除
-                </button>
-              </div>
-            ))}
-            {enableMsg && (
-              <div className="feedback correct" style={{ marginTop: 8 }}>
-                {enableMsg}
-              </div>
-            )}
-          </div>
-        )}
-
-        {saveMsg && (
-          <div className="feedback correct" style={{ marginTop: 8 }}>
-            {saveMsg}
-          </div>
-        )}
       </section>
 
       {showEngineHelp && (

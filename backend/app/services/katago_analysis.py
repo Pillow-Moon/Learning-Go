@@ -8,6 +8,7 @@ Analysis 引擎使用 JSON 行协议：
     {"id": "q1", "moveInfos": [{"move":"Q10","winrate":0.65,"scoreLead":2.3,"pv":[...]}], "rootInfo": {...}}
 
 用于：候选选点、胜率、目差、变化图，是 AI 解说的数据源。
+2026-08 精简：GTP 对弈层已删除，坐标转换函数移入本模块。
 """
 from __future__ import annotations
 
@@ -18,11 +19,33 @@ import logging
 from collections.abc import Awaitable, Callable
 
 from app.services import engine_manager
-from app.services.katago_gtp import gtp_to_vertex, vertex_to_gtp
 
 logger = logging.getLogger(__name__)
 
 _id_counter = itertools.count(1)
+
+# ─── GTP 坐标转换（原 katago_gtp，随对弈层删除移入） ────────────────
+
+# 列坐标字母（围棋惯例跳过 I）
+_LETTERS = "ABCDEFGHJKLMNOPQRSTUVWXYZ"
+
+
+def vertex_to_gtp(vertex: tuple[int, int], board_size: int) -> str:
+    """[x, y]（y=0 在顶部）-> GTP 坐标，如 (15, 3) -> 'Q16'。"""
+    x, y = vertex
+    return f"{_LETTERS[x]}{board_size - y}"
+
+
+def gtp_to_vertex(coord: str, board_size: int) -> tuple[int, int] | None:
+    """GTP 坐标 'Q16' -> [x, y]。pass/resign 返回 None。"""
+    coord = coord.strip().upper()
+    if coord in ("PASS", "RESIGN", ""):
+        return None
+    if len(coord) < 2:
+        return None
+    x = _LETTERS.index(coord[0])
+    y = board_size - int(coord[1:])
+    return (x, y)
 
 
 def _iter_json_objects(line: str):
@@ -110,11 +133,14 @@ class KataGoAnalysis:
         board_size: int = 19,
         komi: float = 7.5,
         max_visits: int = 100,
+        initial_stones: dict | None = None,
         on_snapshot: Callable[[dict], Awaitable[None]] | None = None,
     ) -> dict:
         """分析当前局面。
 
         moves: 历史落子列表，元素为 (color 'B'/'W', vertex 或 None=pass)。
+        initial_stones: 可选初始摆子（死活题等静态局面），形如 {"B": [[x,y],...], "W": [...]}，
+            引擎先摆子再按 moves 落子。
         on_snapshot: 可选异步回调，搜索期间每收到一行中间态 JSON（isDuringSearch
             =true）都会调用（含最终行），参数为与返回值同结构的格式化结果。
             不传时行为与原来一致（读完全部行直到最终行返回）。
@@ -134,11 +160,21 @@ class KataGoAnalysis:
             assert self.proc and self.proc.stdin and self.proc.stdout
 
             query_id = f"q{next(_id_counter)}"
-            # 构造 moves：[[ "B", "Q16" ], ...]，pass 用空字符串
+            # 构造 moves：[[ "B", "Q16" ], ...]，pass 用 "pass"（空字符串会导致
+            # KataGo 报 "Could not parse board location"）
             move_list = []
             for color, vertex in moves:
-                loc = "" if vertex is None else vertex_to_gtp(vertex, board_size)
+                loc = "pass" if vertex is None else vertex_to_gtp(vertex, board_size)
                 move_list.append([color, loc])
+
+            # 初始摆子（KataGo initialStones 协议：[["b", "Q16"], ["w", "D4"], ...] 数组对）
+            initial_list = None
+            if initial_stones:
+                initial_list = [
+                    [color.lower(), vertex_to_gtp(v, board_size)]
+                    for color, stones in initial_stones.items()
+                    for v in stones
+                ]
 
             query = {
                 "id": query_id,
@@ -153,6 +189,8 @@ class KataGoAnalysis:
                 # 支撑前端实时增量渲染；未设该字段 KataGo 只输出最终行
                 "reportDuringSearchEvery": 1.0,
             }
+            if initial_list:
+                query["initialStones"] = initial_list
             self.proc.stdin.write((json.dumps(query) + "\n").encode())
             await self.proc.stdin.drain()
 

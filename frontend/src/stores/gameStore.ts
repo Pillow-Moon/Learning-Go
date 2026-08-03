@@ -1,29 +1,21 @@
 /**
- * 对局状态机（Zustand）。
+ * 对局状态机（Zustand）——本地双人对弈。
  *
  * 规则引擎使用 @sabaki/go-board：
  *  - analyzeMove 做合法性校验（占位 / 自杀 / 打劫）
  *  - makeMove 应用落子，自动处理提子与劫的追踪
  *
- * 状态流转：
- *  idle -> playing(等待用户) -> waiting_ai(等待AI) -> playing -> ... -> finished
- *  本地双人模式下不会出现 waiting_ai。
+ * 2026-08 精简：AI 对弈已移除（对局使用星阵等外部平台，本平台专注复盘），
+ * 本状态机只承担本地双人（同屏轮换落子）与棋谱保存。
+ *
+ * 状态流转：idle -> playing -> ... -> finished（双虚手进入 scoring 确认）。
  */
 import { create } from 'zustand'
 import GoBoard from '@sabaki/go-board'
 
-import type {
-  BoardSize,
-  GameMode,
-  GameStatus,
-  Move,
-  Player,
-  Vertex,
-} from '../lib/types'
-import { getCurrentEngine } from '../engines/manager'
-import { useSettingsStore } from './settingsStore'
+import type { BoardSize, GameStatus, Move, Player, Vertex } from '../lib/types'
 import { useAnalysisStore } from './analysisStore'
-import { aiVisitsFor, type AIStrengthId } from '../lib/strength'
+import { movesToSgf, getHandicapPoints } from '../lib/sgf'
 import { saveGame } from '../lib/db'
 
 /** 连续 pass 两次视为终局 */
@@ -31,12 +23,9 @@ const PASS_TO_END = 2
 
 export interface NewGameOpts {
   size?: BoardSize
-  mode?: GameMode
-  aiColor?: Player
-  maxVisits?: number
   komi?: number
-  /** 本局 AI 强度等级（临时覆盖全局设置；不传则用全局默认） */
-  aiStrength?: AIStrengthId | null
+  /** 让子数（0-9，黑摆子，白先走；贴目自动改为 0.5） */
+  handicap?: number
 }
 
 interface GameState {
@@ -49,24 +38,23 @@ interface GameState {
   lastMove: Vertex | null
   history: GoBoard[]
 
-  // 人机对弈配置
-  gameMode: GameMode
-  aiColor: Player
   komi: number
-  maxVisits: number
-  /** 本局 AI 强度等级（null = 用全局设置） */
-  aiStrength: AIStrengthId | null
-  aiError: string | null
+  /** 本局让子数（0 = 无让子） */
+  handicap: number
+  /** 让子摆位（黑） */
+  handicapStones: Vertex[]
 
   newGame: (opts?: NewGameOpts) => void
   playMove: (vertex: Vertex) => boolean
   pass: () => void
   resign: () => void
   undo: () => void
+  /** 点目确认：以最后一次分析结果计算胜负并结束对局 */
+  confirmScoring: () => void
+  /** 继续对弈：撤销最后两手虚手，回到对局 */
+  continueScoring: () => void
   /** 对局结束后重置：清空棋盘与着法，回到未开始（idle）状态，保留设置表单 */
   resetToSetup: () => void
-  requestAiMove: () => Promise<void>
-  clearAiError: () => void
 }
 
 function emptyBoard(size: BoardSize): GoBoard {
@@ -83,16 +71,28 @@ function trailingPasses(moves: Move[]): number {
 }
 
 export const useGameStore = create<GameState>((set, get) => {
-  /** 对局结束时自动保存到 IndexedDB */
+  /** 对局结束时自动保存到 IndexedDB（含 SGF 序列化） */
   const autoSave = () => {
     const s = get()
     if (s.status !== 'finished' || s.moves.length === 0) return
+    let sgf = ''
+    try {
+      sgf = movesToSgf({
+        boardSize: s.boardSize,
+        komi: s.komi,
+        result: s.result ?? undefined,
+        moves: s.moves,
+        handicapStones: s.handicapStones,
+      })
+    } catch {
+      // SGF 序列化失败不阻塞保存
+    }
     const record = {
       boardSize: s.boardSize,
       komi: s.komi,
-      mode: s.gameMode,
+      mode: 'local',
       result: s.result ?? '未知',
-      sgf: '',
+      sgf,
       createdAt: '',
       moves: s.moves.map((m) => ({
         n: m.n,
@@ -106,32 +106,24 @@ export const useGameStore = create<GameState>((set, get) => {
     })
   }
 
-  /** 内部：把一手已校验的着法推入状态（ stone 或 pass ）。 */
+  /** 内部：把一手已校验的着法推入状态（ stone 或 pass ）。
+   *  连续两次虚手进入「点目」状态（scoring），由用户确认后结束。 */
   const pushMove = (move: Move, newBoard: GoBoard, lastMove: Vertex | null) => {
     const { board, moves, history } = get()
     const newMoves = [...moves, move]
-    const finished = trailingPasses(newMoves) >= PASS_TO_END
+    const doublePass = trailingPasses(newMoves) >= PASS_TO_END
     set({
       history: [...history, board],
       board: newBoard,
       moves: newMoves,
       currentPlayer: (move.color === 1 ? -1 : 1) as Player,
       lastMove,
-      status: finished ? 'finished' : 'playing',
-      result: finished ? '双方虚手，对局结束' : null,
+      status: doublePass ? 'scoring' : 'playing',
+      result: null,
     })
-    if (finished) autoSave()
-  }
-
-  /** 内部：若处于人机模式且轮到 AI，则触发 AI 应手。 */
-  const maybeTriggerAi = () => {
-    const s = get()
-    if (
-      s.gameMode === 'human_vs_ai' &&
-      s.status === 'playing' &&
-      s.currentPlayer === s.aiColor
-    ) {
-      void s.requestAiMove()
+    if (doublePass) {
+      // 双虚手：进入点目确认，不自动保存（确认后才结束）
+      useAnalysisStore.getState().clear()
     }
   }
 
@@ -144,30 +136,29 @@ export const useGameStore = create<GameState>((set, get) => {
     result: null,
     lastMove: null,
     history: [],
-    gameMode: 'human_vs_human',
-    aiColor: -1,
     komi: 7.5,
-    maxVisits: 100,
-    aiStrength: null,
-    aiError: null,
+    handicap: 0,
+    handicapStones: [],
 
     newGame: (opts) => {
       const size = opts?.size ?? get().boardSize
+      const handicap = opts?.handicap ?? 0
+      // 让子摆位（黑），让子棋白先走、贴目 0.5
+      const stones = handicap > 0 ? getHandicapPoints(size, handicap) : []
+      const board = emptyBoard(size)
+      for (const v of stones) board.set(v, 1)
       set({
         boardSize: size,
-        board: emptyBoard(size),
-        currentPlayer: 1,
+        board,
+        currentPlayer: handicap > 0 ? -1 : 1,
         moves: [],
         status: 'playing',
         result: null,
         lastMove: null,
         history: [],
-        gameMode: opts?.mode ?? 'human_vs_human',
-        aiColor: opts?.aiColor ?? -1,
-        komi: opts?.komi ?? 7.5,
-        maxVisits: opts?.maxVisits ?? 100,
-        aiStrength: opts?.aiStrength ?? null,
-        aiError: null,
+        komi: handicap > 0 ? 0.5 : opts?.komi ?? 7.5,
+        handicap,
+        handicapStones: stones,
       })
     },
 
@@ -184,7 +175,6 @@ export const useGameStore = create<GameState>((set, get) => {
         pass: false,
       }
       pushMove(move, newBoard, vertex)
-      maybeTriggerAi()
       return true
     },
 
@@ -198,34 +188,68 @@ export const useGameStore = create<GameState>((set, get) => {
         pass: true,
       }
       pushMove(move, board, null)
-      maybeTriggerAi()
     },
 
     resign: () => {
       const { status, currentPlayer } = get()
-      if (status !== 'playing' && status !== 'waiting_ai') return
+      if (status !== 'playing') return
       const winner = currentPlayer === 1 ? '白' : '黑'
       set({ status: 'finished', result: `${winner}中盘胜` })
       autoSave()
     },
 
     undo: () => {
-      const { history, moves, status } = get()
+      const { history, moves, status, handicap } = get()
       if (history.length === 0) return
       const newHistory = history.slice(0, -1)
       const prevBoard = history[history.length - 1]
       const newMoves = moves.slice(0, -1)
       const last = newMoves[newMoves.length - 1]
+      // 下一手行棋方 = 被撤销那手的一方（让子棋撤销到开局时为白先）
+      const undone = moves[moves.length - 1]
+      const currentPlayer = undone
+        ? undone.color
+        : ((handicap > 0 ? -1 : 1) as Player)
       set({
         history: newHistory,
         board: prevBoard,
         moves: newMoves,
-        currentPlayer: (newMoves.length % 2 === 0 ? 1 : -1) as Player,
+        currentPlayer,
         lastMove: last && !last.pass ? last.vertex : null,
-        status: status === 'finished' ? 'playing' : status,
+        status: status === 'finished' || status === 'scoring' ? 'playing' : status,
         result: null,
-        aiError: null,
       })
+    },
+
+    /** 点目确认：以最后一次分析结果计算胜负并结束对局 */
+    confirmScoring: () => {
+      const s = get()
+      if (s.status !== 'scoring') return
+      const analysis = useAnalysisStore.getState()
+      const scoreLead = analysis.rootScoreLead
+      let result: string
+      if (scoreLead != null) {
+        // 引擎统一输出黑方视角：scoreLead 正 = 黑领先
+        const blackDiff = scoreLead
+        if (Math.abs(blackDiff) < 0.05) {
+          result = '和棋'
+        } else {
+          const winner = blackDiff > 0 ? '黑' : '白'
+          result = `${winner}胜 ${Math.abs(blackDiff).toFixed(1)} 目`
+        }
+      } else {
+        result = '双方虚手，对局结束'
+      }
+      set({ status: 'finished', result })
+      autoSave()
+    },
+
+    /** 继续对弈：撤销最后两手虚手，回到对局 */
+    continueScoring: () => {
+      const s = get()
+      if (s.status !== 'scoring') return
+      s.undo()
+      s.undo()
     },
 
     resetToSetup: () => {
@@ -239,100 +263,9 @@ export const useGameStore = create<GameState>((set, get) => {
         result: null,
         lastMove: null,
         history: [],
-        aiError: null,
+        handicap: 0,
+        handicapStones: [],
       })
     },
-
-    requestAiMove: async () => {
-      const s = get()
-      if (s.status !== 'playing' || s.currentPlayer !== s.aiColor) return
-      set({ status: 'waiting_ai', aiError: null })
-
-      // AI 落子优先：取消排队中的局面分析（WASM 串行队列，避免分析阻塞落子）
-      useAnalysisStore.getState().stopAnalysis()
-
-      const engine = getCurrentEngine()
-      if (!engine.isReady()) {
-        set({
-          status: 'playing',
-          aiError: '引擎未就绪。请检查：本地后端是否已启动？或在设置中切换引擎来源。',
-        })
-        return
-      }
-
-      // 自适应 maxVisits（棋力轴：等级倍率 × 模型棋力系数；本局等级优先，未指定默认业余 1 段）
-      const settings = useSettingsStore.getState()
-      const strengthId = s.aiStrength ?? 'am1d'
-      const bScore =
-        settings.engineSource === 'local'
-          ? settings.localBenchmarkScore
-          : settings.wasmBenchmarkScore
-      let visits = s.maxVisits
-      if (bScore > 0) {
-        visits = aiVisitsFor(strengthId, 'move', engine.getInfo().model)
-      }
-
-      const engineMoves: [string, [number, number] | null][] = s.moves.map((m) => [
-        m.color === 1 ? 'B' : 'W',
-        m.vertex,
-      ])
-
-      try {
-        // 引擎模式统一入口：Local 按档位决定 Human-SL/visits，WASM no-op
-        engine.setStrength(s.aiStrength ?? null)
-        const resp = await engine.genmove(
-          s.aiColor,
-          s.boardSize,
-          s.komi,
-          visits,
-          engineMoves,
-        )
-        const cur = get()
-        if (cur.status !== 'waiting_ai') return
-
-        if (resp.coord === 'resign') {
-          const winner = s.aiColor === 1 ? '白' : '黑'
-          set({ status: 'finished', result: `${winner}中盘胜（AI 认输）` })
-          autoSave()
-          return
-        }
-        if (resp.coord === 'pass' || resp.vertex === null) {
-          const move: Move = {
-            n: cur.moves.length + 1,
-            color: s.aiColor,
-            vertex: null,
-            pass: true,
-          }
-          pushMove(move, cur.board, null)
-          return
-        }
-        const analysis = cur.board.analyzeMove(s.aiColor, resp.vertex)
-        if (analysis.overwrite || analysis.suicide || analysis.ko) {
-          const move: Move = {
-            n: cur.moves.length + 1,
-            color: s.aiColor,
-            vertex: null,
-            pass: true,
-          }
-          pushMove(move, cur.board, null)
-          return
-        }
-        const newBoard = cur.board.makeMove(s.aiColor, resp.vertex)
-        const move: Move = {
-          n: cur.moves.length + 1,
-          color: s.aiColor,
-          vertex: resp.vertex,
-          pass: false,
-        }
-        pushMove(move, newBoard, resp.vertex)
-      } catch (err) {
-        set({
-          status: 'playing',
-          aiError: err instanceof Error ? err.message : 'AI 请求失败',
-        })
-      }
-    },
-
-    clearAiError: () => set({ aiError: null }),
   }
 })

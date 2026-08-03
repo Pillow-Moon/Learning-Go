@@ -28,10 +28,8 @@ backend/.env
 
 # ===== KataGo 二进制发行文件（exe/dll/权重/示例配置等不入库）=====
 backend/katago/*
-# 仅保留项目自定义配置
-!backend/katago/katago_gtp.cfg
+# 仅保留项目自定义配置（AI 对弈已删，仅剩分析配置）
 !backend/katago/katago_analysis.cfg
-!backend/katago/human_gtp.cfg
 
 # ===== Node / 前端 =====
 node_modules/
@@ -47,6 +45,9 @@ frontend/wasm/        # KataGo WASM 二进制（体积大）
 logs/
 .DS_Store
 Thumbs.db
+
+# ===== 本地调试截图（页面截图仅供开发参考，不入库）=====
+frontend/.*shot*.png
 
 # ===== IDE =====
 .vscode/

@@ -18,31 +18,13 @@
  *     { type: 'error', id: string, message: string }
  *     { type: 'progress', text: string }
  */
-import type {
-  AnalysisResult,
-  Candidate,
-  EngineInfo,
-  GenmoveResult,
-  GoEngine,
-} from './types'
-import type { Player } from '../lib/types'
-import { kyuRankFor, type AIStrengthId } from '../lib/strength'
+import type { AnalysisResult, Candidate, EngineInfo, GoEngine } from './types'
 import { useSettingsStore, type WasmModelId } from '../stores/settingsStore'
-import { boardFromMoves, selectBlindedMove } from '../lib/rankInjection'
 
 /** 各模型对应的文件名（同源 /wasm/ 目录；模型收敛后仅 b6c96） */
 const MODEL_FILES: Record<WasmModelId, string> = {
   b6c96: 'b6c96.bin.gz',
 }
-
-/**
- * 盲注错误注入档位的搜索量上限（对弈统一低搜索量）：
- * 盲注选点只看 policy（1 visit 即有完整 policy），visits 只影响耗时——
- * 19 路约 2~6s 搜索 + 3~5s 重建 ≈ 每手 5~11s。可调。
- */
-const INJECTION_MAX_VISITS = 32
-/** 注入档每手时间兜底（秒，KataGo maxTime 官方参数，先到者停） */
-const INJECTION_MAX_TIME = 20
 
 // ─── GTP 坐标转换 ───────────────────────────────────────────────
 
@@ -102,8 +84,6 @@ export class WasmEngine implements GoEngine {
   private worker: Worker | null = null
   private ready = false
   private benchmarkScore = -1
-  /** 本局 AI 档位（setStrength 传入；盲注错误注入仅对 WASM 简化档生效） */
-  private strengthId: AIStrengthId | null = null
   private pendingRequests = new Map<
     string,
     {
@@ -303,6 +283,7 @@ export class WasmEngine implements GoEngine {
       maxVisits: number
       maxTime?: number
       moves: [string, [number, number] | null][]
+      initialStones?: { B?: [number, number][]; W?: [number, number][] }
     },
     onSnapshot: ((result: AnalysisResult) => void) | undefined,
     urgent: boolean,
@@ -322,8 +303,17 @@ export class WasmEngine implements GoEngine {
       moves: query.moves.map(([color, vertex]) =>
         vertex
           ? [color, toGtp(vertex, query.boardSize)]
-          : [color, ''],
+          : [color, 'pass'], // KataGo 分析协议：pass 用 "pass" 字符串（空串解析失败）
       ),
+      // 初始摆子（KataGo initialStones 协议：[['b','Q16'],['w','D4'],...] 数组对）
+      ...(query.initialStones
+        ? {
+            initialStones: Object.entries(query.initialStones)
+              .flatMap(([color, vs]) =>
+                (vs ?? []).map((v) => [color.toLowerCase(), toGtp(v, query.boardSize)]),
+              ),
+          }
+        : {}),
       rules: 'chinese',
       boardXSize: query.boardSize,
       boardYSize: query.boardSize,
@@ -394,15 +384,11 @@ export class WasmEngine implements GoEngine {
       | { winrate?: number; scoreLead?: number; currentPlayer?: string }
       | undefined
 
-    // KataGo 按 reportAnalysisWinratesAs=BLACK 以黑方胜率输出。
-    // 转换为当前玩家视角，避免轮到白棋时棋盘/解说显示黑方胜率造成误导。
-    const flip = rootInfo?.currentPlayer === 'W'
-    const toPlayerView = (v: number | null | undefined): number | null =>
-      v == null ? null : flip ? 1 - v : v
-
+    // KataGo 按 reportAnalysisWinratesAs=BLACK 输出：winrate 恒为黑方胜率，
+    // root/moveInfos 的 scoreLead 恒为黑方视角（正=黑领先）。统一原样透传。
     const candidates: Candidate[] = moveInfos.map((info) => ({
       move: gtpToVertex(info.move ?? '', boardSize),
-      winrate: toPlayerView(info.winrate),
+      winrate: info.winrate ?? null,
       scoreLead: info.scoreLead ?? null,
       visits: info.visits ?? null,
       prior: info.prior ?? null,
@@ -415,7 +401,7 @@ export class WasmEngine implements GoEngine {
       boardSize,
       candidates,
       root: {
-        winrate: toPlayerView(rootInfo?.winrate) ?? undefined,
+        winrate: rootInfo?.winrate ?? undefined,
         scoreLead: rootInfo?.scoreLead,
       },
       // KataGo 把 ownership 放在响应顶层，不在 rootInfo 里
@@ -425,69 +411,8 @@ export class WasmEngine implements GoEngine {
     }
   }
 
-  async genmove(
-    color: Player,
-    boardSize: number,
-    komi: number,
-    maxVisits: number,
-    moves: [string, [number, number] | null][],
-  ): Promise<GenmoveResult> {
-    console.log('[WasmEngine] genmove 开始, moves:', moves.length)
-
-    // KaTrain 式盲注错误注入：WASM 19 路对弈档位（am20k~am5d，kyuRank 由 id 推导）
-    // 落子时从随机抽样的 n_moves 个合法点中选 policy 最高者，棋力精确等于对应级别
-    // （纯 visits 压不下棋力，见 backend/calibration/2026-08-01-p7b.md 结论 4）。
-    // 9/13 路不注入：盲注公式按 19 路校准，小棋盘失真（保持纯 visits 体系）。
-    const kyuRank = boardSize === 19 ? kyuRankFor(this.strengthId) : null
-    const injecting = kyuRank != null
-    // 注入档：选点只看 policy（1 visit 即有完整 policy），visits 只影响耗时——
-    // 统一低搜索量 + maxTime 兜底，任意档位每手约 5~11s（先 clamp 再分析，
-    // 避免先按档位大 visits 跑满搜索浪费等待时间）
-    const effectiveVisits = injecting
-      ? Math.min(maxVisits, INJECTION_MAX_VISITS)
-      : maxVisits
-    const result = await this.analyzeInternal(
-      {
-        boardSize,
-        komi,
-        maxVisits: effectiveVisits,
-        maxTime: injecting ? INJECTION_MAX_TIME : undefined,
-        moves,
-      },
-      undefined,
-      true, // 对弈落子：worker 队列插队，不被排队的局面分析阻塞
-    )
-    console.log('[WasmEngine] genmove 分析完成, candidates:', result.candidates.length)
-
-    if (injecting && result.policy && result.policy.length > 0) {
-      const picked = selectBlindedMove({
-        boardSize,
-        kyuRank,
-        policy: result.policy,
-        board: boardFromMoves(moves, boardSize),
-        player: color,
-      })
-      console.log('[WasmEngine] genmove 盲注选点:', picked.reason, picked.vertex)
-      return {
-        vertex: picked.vertex,
-        coord: picked.vertex
-          ? `${String.fromCharCode(
-              65 + (picked.vertex[0] >= 8 ? picked.vertex[0] + 1 : picked.vertex[0]),
-            )}${boardSize - picked.vertex[1]}`
-          : null,
-      }
-    }
-
-    const best = result.candidates[0]
-    console.log('[WasmEngine] genmove best move:', best?.move)
-    return {
-      vertex: best?.move ?? null,
-      coord: best?.move
-        ? `${String.fromCharCode(
-            65 + (best.move[0] >= 8 ? best.move[0] + 1 : best.move[0]),
-          )}${boardSize - best.move[1]}`
-        : null,
-    }
+  async genmove(): Promise<never> {
+    throw new Error('AI 对弈已移除：对局请使用星阵等外部平台，本平台专注复盘')
   }
 
   destroy(): void {
@@ -498,11 +423,6 @@ export class WasmEngine implements GoEngine {
     this.initReject?.(new Error('引擎已销毁')) // 进行中的 init 立即失败
     this.initReject = null
     this.pendingRequests.clear()
-  }
-
-  setStrength(strengthId: AIStrengthId | null): void {
-    // WASM 无 Human-SL 引擎；档位保存供盲注错误注入使用（强度同时由调用方按 visits 计算）
-    this.strengthId = strengthId
   }
 
   private ensureReady(): void {

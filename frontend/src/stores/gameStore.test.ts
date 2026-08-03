@@ -77,12 +77,26 @@ describe('打劫', () => {
 })
 
 describe('终局与悔棋', () => {
-  it('双方连续虚手结束对局', () => {
+  it('双方连续虚手进入点目，确认后结束', () => {
     s().playMove([4, 4])
     s().pass()
     expect(s().status).toBe('playing')
     s().pass()
+    expect(s().status).toBe('scoring') // 进入点目确认
+    s().confirmScoring()
     expect(s().status).toBe('finished')
+    expect(s().result).toBe('双方虚手，对局结束') // 无分析结果时的兜底
+  })
+
+  it('点目确认前可继续对弈（撤销两手虚手）', () => {
+    s().playMove([4, 4])
+    s().pass()
+    s().pass()
+    expect(s().status).toBe('scoring')
+    s().continueScoring()
+    expect(s().status).toBe('playing')
+    expect(s().moves.length).toBe(1)
+    expect(s().currentPlayer).toBe(-1)
   })
 
   it('悔棋恢复到上一手', () => {

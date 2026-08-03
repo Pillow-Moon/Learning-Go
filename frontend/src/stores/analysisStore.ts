@@ -21,10 +21,12 @@ interface AnalysisState {
   analyzedMoveCount: number
 
   analyze: (params: {
-    moves: { color: string; vertex: [number, number] | null }[]
+    moves: [string, [number, number] | null][]
     boardSize: number
     komi: number
     maxVisits: number
+    /** 初始摆子（死活题等静态局面）：先摆子再按 moves 落子 */
+    initialStones?: { B?: [number, number][]; W?: [number, number][] }
   }) => Promise<void>
   /** 停止当前分析（WASM：取消排队中的分析并忽略进行中结果，避免阻塞 AI 落子） */
   stopAnalysis: () => void
@@ -38,6 +40,14 @@ interface AnalysisState {
  */
 const ANALYSIS_MAX_VISITS_WASM = 500
 
+/**
+ * Local 引擎单次分析搜索量上限：
+ * 未测基准时分析档位会放开到 pro9d（×40 倍率），
+ * 大模型上可达数万 visits（RTX 级 10 分钟+），超出教学等待上限。
+ * 4000 visits 在 RTX 3060（~40 v/s）约 100 秒，普通卡可接受。
+ */
+const ANALYSIS_MAX_VISITS_LOCAL = 4000
+
 export const useAnalysisStore = create<AnalysisState>((set) => ({
   candidates: null,
   rootWinrate: null,
@@ -47,11 +57,12 @@ export const useAnalysisStore = create<AnalysisState>((set) => ({
   error: null,
   analyzedMoveCount: -1,
 
-  analyze: async ({ moves, boardSize, komi }: {
-    moves: { color: string; vertex: [number, number] | null }[]
+  analyze: async ({ moves, boardSize, komi, initialStones }: {
+    moves: [string, [number, number] | null][]
     boardSize: number
     komi: number
     maxVisits: number
+    initialStones?: { B?: [number, number][]; W?: [number, number][] }
   }) => {
     set({ analyzing: true, error: null })
     // 节流定时器：try 与 catch 都需要访问，故声明在函数级
@@ -75,15 +86,15 @@ export const useAnalysisStore = create<AnalysisState>((set) => ({
         'analysis',
       )
       const rawVisits = aiVisitsFor(maxStrength, 'analysis', engineModel)
-      // WASM 限制单次分析搜索量（串行队列会阻塞对弈落子，见 ANALYSIS_MAX_VISITS_WASM）
+      // 限制单次分析搜索量：WASM 串行队列会阻塞对弈落子；Local 大模型未测基准时档位放开导致耗时过长
       const visits =
         engineSource === 'browser'
           ? Math.min(rawVisits, ANALYSIS_MAX_VISITS_WASM)
-          : rawVisits
+          : Math.min(rawVisits, ANALYSIS_MAX_VISITS_LOCAL)
 
       const engineMoves: [string, [number, number] | null][] = moves.map((m) => [
-        m.color,
-        m.vertex,
+        m[0],
+        m[1],
       ])
 
       // 中间快照节流：搜索期间 KataGo 周期性输出中间态，300ms 合并一次渲染，
@@ -129,6 +140,7 @@ export const useAnalysisStore = create<AnalysisState>((set) => ({
           komi,
           maxVisits: visits,
           moves: engineMoves,
+          initialStones,
         },
         onSnapshot,
       )

@@ -110,6 +110,68 @@ button:disabled {
   color: var(--primary-dark);
 }
 
+.nav a.active {
+  color: var(--primary-dark);
+  font-weight: 600;
+}
+
+/* 研究二级菜单 */
+.nav-dropdown {
+  position: relative;
+  display: flex;
+  align-items: center;
+}
+
+.nav-dropdown-caret {
+  font-size: 9px;
+  margin-left: 3px;
+  vertical-align: 1px;
+}
+
+.nav-dropdown-panel {
+  position: absolute;
+  top: calc(100% + 10px);
+  left: 50%;
+  transform: translateX(-50%);
+  min-width: 132px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  box-shadow: var(--shadow);
+  padding: 6px;
+  display: flex;
+  flex-direction: column;
+  z-index: 60;
+}
+
+.nav-dropdown-panel::before {
+  /* 顶部悬停桥：避免鼠标移出触发区时菜单消失 */
+  content: '';
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: -10px;
+  height: 10px;
+}
+
+.nav-dropdown-panel a {
+  padding: 9px 14px;
+  border-radius: 7px;
+  font-size: 14px;
+  white-space: nowrap;
+}
+
+.nav-dropdown-panel a:hover {
+  background: var(--bg);
+  color: var(--primary-dark);
+}
+
+.nav-dropdown-panel a.active {
+  color: var(--primary-dark);
+  font-weight: 600;
+  background: var(--bg);
+}
+
 /* 夜间模式切换按钮 */
 .theme-toggle {
   border: 1px solid var(--border);
@@ -273,7 +335,10 @@ button:disabled {
 
 /* tab 内容区：覆盖组件的独立卡片样式，由 .side-tabs 统一承担 */
 .side-tabs .controls,
-.side-tabs .commentary-panel {
+.side-tabs .commentary-panel,
+.side-tabs .review-panel,
+.side-tabs .library-panel,
+.side-tabs .analysis-panel {
   flex: 1;
   background: transparent;
   border: none;
@@ -440,11 +505,38 @@ button:disabled {
   display: flex;
   gap: 8px;
   flex: 1;
+  flex-wrap: wrap;
 }
 
 .seg-group .seg-btn {
-  flex: 1;
+  flex: 1 1 auto;
   padding: 8px 12px;
+}
+
+/* 点目确认面板（双方虚手后） */
+.scoring-panel {
+  margin-top: 4px;
+  padding: 12px 14px;
+  border: 1px solid var(--primary);
+  border-radius: 8px;
+  background: var(--engine-active-bg, var(--bg));
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.scoring-title {
+  font-size: 14px;
+  font-weight: 600;
+}
+
+.scoring-actions {
+  display: flex;
+  gap: 8px;
+}
+
+.scoring-actions .btn {
+  flex: 1;
 }
 
 /* ===== 按钮 ===== */
@@ -639,144 +731,6 @@ button:disabled {
 
 .recommend-table .lead-neg {
   color: var(--lose, #c23a3a);
-}
-
-/* ===== 解说面板 ===== */
-.commentary-panel {
-  background: var(--surface);
-  border: 1px solid var(--border);
-  border-radius: 12px;
-  padding: 20px;
-  box-shadow: var(--shadow);
-  display: flex;
-  flex-direction: column;
-  gap: 12px;
-}
-
-.commentary-header {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-}
-
-.commentary-header h3 {
-  font-size: 17px;
-}
-
-.level-select {
-  flex: none;
-  width: auto;
-  padding: 6px 10px;
-}
-
-.commentary-text {
-  background: var(--bg);
-  border-radius: 8px;
-  padding: 14px;
-  font-size: 15px;
-  line-height: 1.7;
-}
-
-/* Markdown 渲染样式（AI 解说可输出 Markdown，客户端负责渲染） */
-.commentary-text > :first-child,
-.history-item > :first-child {
-  margin-top: 0;
-}
-.commentary-text > :last-child,
-.history-item > :last-child {
-  margin-bottom: 0;
-}
-.commentary-text p,
-.commentary-text ul,
-.commentary-text ol,
-.commentary-text blockquote,
-.history-item p,
-.history-item ul,
-.history-item ol,
-.history-item blockquote {
-  margin: 0 0 8px;
-}
-.commentary-text ul,
-.commentary-text ol,
-.history-item ul,
-.history-item ol {
-  padding-left: 20px;
-}
-.commentary-text li,
-.history-item li {
-  margin: 2px 0;
-}
-.commentary-text h1,
-.commentary-text h2,
-.commentary-text h3,
-.commentary-text h4,
-.history-item h1,
-.history-item h2,
-.history-item h3,
-.history-item h4 {
-  margin: 12px 0 6px;
-  font-size: inherit;
-  font-weight: 700;
-}
-.commentary-text strong,
-.history-item strong {
-  font-weight: 700;
-  color: var(--primary, inherit);
-}
-.commentary-text code,
-.history-item code {
-  background: rgba(127, 127, 127, 0.18);
-  padding: 1px 5px;
-  border-radius: 4px;
-  font-size: 0.92em;
-}
-.commentary-text blockquote,
-.history-item blockquote {
-  padding-left: 10px;
-  border-left: 3px solid rgba(127, 127, 127, 0.4);
-  color: var(--text-muted);
-}
-
-.cursor {
-  color: var(--primary);
-  animation: blink 1s step-end infinite;
-}
-
-@keyframes blink {
-  50% {
-    opacity: 0;
-  }
-}
-
-.variations {
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-}
-
-.variation-btns {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 8px;
-}
-
-.variation-btn {
-  padding: 6px 12px;
-  font-size: 13px;
-}
-
-.commentary-history summary {
-  cursor: pointer;
-  color: var(--text-muted);
-  font-size: 14px;
-}
-
-.history-item {
-  margin-top: 10px;
-  padding: 10px;
-  background: var(--bg);
-  border-radius: 8px;
-  font-size: 14px;
 }
 
 /* ===== 设置页 ===== */
@@ -1218,107 +1172,244 @@ button:disabled {
   font-style: italic;
 }
 
-/* ===== 评估页 ===== */
-.assessment-page {
-  max-width: 720px;
-  margin: 0 auto;
-}
-
-.assessment-stage {
+/* ===== 复盘页 ===== */
+/* 棋盘叠加信息条（手数 / 结果） */
+.review-board-info {
+  position: absolute;
+  top: 10px;
+  left: 50%;
+  transform: translateX(-50%);
   display: flex;
   flex-direction: column;
-  gap: 12px;
-  align-items: flex-start;
-}
-
-.assessment-board {
-  background: var(--surface);
-  padding: 12px;
-  border-radius: 12px;
+  align-items: center;
+  gap: 4px;
+  background: color-mix(in srgb, var(--surface) 88%, transparent);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 6px 14px;
+  font-size: 13px;
+  font-weight: 600;
+  white-space: nowrap;
+  pointer-events: none;
+  z-index: 5;
   box-shadow: var(--shadow);
 }
 
-.feedback {
-  padding: 14px;
-  border-radius: 8px;
-  width: 100%;
+.review-result {
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--primary-dark);
 }
 
-.feedback.correct {
-  background: var(--ok-bg);
-  border: 1px solid var(--ok-border);
-}
-
-.feedback.wrong {
-  background: var(--err-bg);
-  border: 1px solid var(--err-border);
-}
-
-.feedback p {
-  margin: 6px 0;
-}
-
-.report-page {
-  text-align: center;
+/* 复盘面板 */
+.review-panel {
   display: flex;
   flex-direction: column;
-  align-items: center;
-  gap: 16px;
+  gap: 12px;
 }
 
-.report-level {
+.review-meta {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding-bottom: 6px;
+  border-bottom: 1px solid var(--border);
+}
+
+.review-meta .info-label {
+  margin-bottom: 0;
+}
+
+/* 导航控制 */
+.review-nav {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.review-nav-buttons {
+  display: flex;
+  gap: 8px;
+}
+
+.review-nav-buttons .btn {
+  flex: 1;
+}
+
+.review-slider {
+  width: 100%;
+  accent-color: var(--primary);
+}
+
+.review-actions {
   display: flex;
   align-items: center;
-  gap: 14px;
+  gap: 8px;
+  flex-wrap: wrap;
 }
 
-.level-badge {
-  font-size: 28px;
-  font-weight: 700;
-  color: #fff;
-  background: var(--primary);
-  padding: 8px 24px;
-  border-radius: 12px;
+.review-actions .btn {
+  flex: none;
 }
 
-.report-courses {
+/* 胜率曲线卡片 */
+.review-curve {
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 8px 4px 4px;
+  position: relative;
+}
+
+.winrate-chart {
+  position: relative;
   width: 100%;
+}
+
+.winrate-chart svg {
+  display: block;
+  max-width: 100%;
+  cursor: crosshair;
+}
+
+.winrate-tooltip {
+  position: absolute;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 3px 8px;
+  font-size: 12px;
+  white-space: nowrap;
+  pointer-events: none;
+  box-shadow: var(--shadow);
+  z-index: 6;
+}
+
+/* 关键点列表 */
+.review-issues {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.issue-list {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  max-height: 220px;
+  overflow-y: auto;
+}
+
+.issue-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 10px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: var(--surface);
+  cursor: pointer;
+  font-size: 13px;
+  transition: border-color 0.15s;
+}
+
+.issue-item:hover {
+  border-color: var(--primary);
+}
+
+.issue-item.active {
+  border-color: var(--primary);
+  box-shadow: 0 0 0 1px var(--primary) inset;
+}
+
+.issue-move {
+  font-weight: 600;
+  flex: 1;
   text-align: left;
 }
 
-.report-courses h3 {
-  margin-bottom: 12px;
+.issue-label {
+  font-size: 12px;
+  font-weight: 600;
+  padding: 1px 8px;
+  border-radius: 8px;
+  color: #fff;
 }
 
-.report-actions {
-  display: flex;
-  gap: 12px;
+.issue-loss {
+  font-size: 12px;
+  color: var(--text-muted);
+  font-variant-numeric: tabular-nums;
 }
 
-/* ===== 课程页 ===== */
-.course-detail-page {
-  max-width: 760px;
-  margin: 0 auto;
+.verdict-good .issue-label {
+  background: #2e7d32;
+}
+
+.verdict-doubt .issue-label {
+  background: #f57c00;
+}
+
+.verdict-bad .issue-label {
+  background: #c62828;
+}
+
+/* 棋谱库面板 */
+.library-panel {
   display: flex;
   flex-direction: column;
   gap: 12px;
 }
 
-.course-step {
+.library-actions {
   display: flex;
-  gap: 24px;
-  flex-wrap: wrap;
-  align-items: flex-start;
+  flex-direction: column;
+  gap: 8px;
 }
 
-.course-instruction {
+.library-list {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding-top: 6px;
+  border-top: 1px solid var(--border);
+}
+
+.library-item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 12px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--surface);
+  cursor: pointer;
+  font-size: 13px;
+  transition: border-color 0.15s;
+  text-align: left;
+}
+
+.library-item:hover {
+  border-color: var(--primary);
+}
+
+.library-item-main {
   flex: 1;
-  min-width: 240px;
-  font-size: 16px;
-  line-height: 1.7;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
 }
 
-.course-nav {
+.library-item-result {
+  font-size: 12px;
+  color: var(--primary-dark);
+  white-space: nowrap;
+}
+
+/* 分析面板 */
+.analysis-panel {
   display: flex;
-  gap: 12px;
+  flex-direction: column;
+  gap: 10px;
 }

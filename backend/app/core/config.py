@@ -15,11 +15,9 @@ class Settings(BaseSettings):
     app_name: str = "Learning-Go"
     debug: bool = True
 
-    # KataGo
+    # KataGo（模型收敛：仅 b11c768h12 本地分析模型 + WASM b6c96）
     katago_binary: str = "./katago/katago.exe"
-    katago_model: str = "./katago/models/b10c384h6.bin.gz"
-    # GTP 与 Analysis 线程配置键互斥，必须用两个独立配置文件
-    katago_config: str = "./katago/katago_gtp.cfg"
+    katago_model: str = "./katago/models/b11c768h12.bin.gz"
     katago_analysis_config: str = "./katago/katago_analysis.cfg"
 
 

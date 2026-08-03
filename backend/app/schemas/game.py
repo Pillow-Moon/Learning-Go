@@ -39,12 +39,14 @@ class GameMoveResponse(BaseModel):
 
 
 class AnalysisRequest(BaseModel):
-    """分析 moves 之后的局面。"""
+    """分析 moves 之后的局面（可带初始摆子）。"""
 
     board_size: int = 19
     komi: float = 7.5
     max_visits: int = 100
     moves: list[MoveIn] = Field(default_factory=list)
+    # 初始摆子（死活题等静态局面）：{"B": [[x,y], ...], "W": [...]}，引擎先摆子再按 moves 落子
+    initial_stones: dict[str, list[tuple[int, int]]] | None = None
 
 
 class Candidate(BaseModel):

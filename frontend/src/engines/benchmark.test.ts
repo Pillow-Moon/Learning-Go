@@ -5,8 +5,7 @@
 import { describe, expect, it } from 'vitest'
 
 import { runBenchmark } from './benchmark'
-import type { AnalysisResult, EngineInfo, GenmoveResult, GoEngine } from './types'
-import type { Player } from '../lib/types'
+import type { AnalysisResult, EngineInfo, GoEngine } from './types'
 
 /** 可控的假引擎：记录 analyze 调用次数，并按 maxVisits 模拟搜索耗时（不含固定开销） */
 class FakeEngine implements GoEngine {
@@ -33,16 +32,6 @@ class FakeEngine implements GoEngine {
     )
     return { boardSize: 9, candidates: [], root: {} }
   }
-  async genmove(
-    _color: Player,
-    _boardSize: number,
-    _komi: number,
-    _maxVisits: number,
-    _moves: [string, [number, number] | null][],
-  ): Promise<GenmoveResult> {
-    return { vertex: null, coord: null }
-  }
-  setStrength(): void {}
   cancelAnalysis(): void {}
   destroy(): void {}
 }

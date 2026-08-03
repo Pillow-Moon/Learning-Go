@@ -32,13 +32,10 @@ a = Analysis(
     datas=_datas
     + _tune_datas
     + [
-        ("katago/human_gtp.cfg", "katago"),
-        ("katago/katago_gtp.cfg", "katago"),
         ("katago/katago_analysis.cfg", "katago"),
         ("katago/katago.exe", "katago"),
         ("katago/*.dll", "katago"),  # katago.exe 运行依赖（OpenCL/压缩/运行时库）
         ("katago/models/b11c768h12.bin.gz", "models"),
-        ("katago/models/b18c384nbt-humanv0.bin.gz", "models"),
         ("../shared/ai-strength.json", "shared"),
         ("app/api/v1/admin.html", "api/v1"),
     ],

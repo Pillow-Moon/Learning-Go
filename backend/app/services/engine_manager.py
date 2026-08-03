@@ -50,12 +50,8 @@ AVAILABLE_MODELS: dict[str, str] = {
     "b11c768h12": "b11c768h12nbt3tflrs-fson-silu.bin.gz",
 }
 
-# Human-SL 对弈模型（内置：绿色包随附；开发环境放 models/ 目录）
-HUMAN_SL_MODEL_ID = "b18c384nbt-humanv0"
-
-# 可切换模型白名单（模型收敛：仅正常模型 + Human-SL 对弈模型；
-# 目录中其他旧模型文件不列入切换/展示列表）
-_SWITCHABLE_MODELS = {"b11c768h12", HUMAN_SL_MODEL_ID}
+# 可切换模型白名单（模型收敛：仅 b11c768h12 分析模型）
+_SWITCHABLE_MODELS = {"b11c768h12"}
 
 # 运行时当前模型 id（None 时回退到 settings.katago_model）
 _current_model_id: str | None = None
@@ -65,7 +61,10 @@ _downloads: dict[str, dict] = {}
 
 
 def _models_dir() -> Path:
-    """模型目录：绿色包 = 程序目录/data/models（可迁移）；开发 = backend/katago/models。"""
+    """模型目录：绿色包 = 程序目录/data/models（可迁移）；开发 = backend/katago/models。
+
+    模型收敛：仅 b11c768h12（分析/解说/评估共用）。
+    """
     if getattr(sys, "frozen", False):
         return _app_root() / "data" / "models"
     return BACKEND_DIR / "katago" / "models"
@@ -102,8 +101,8 @@ def ensure_bundled_models() -> None:
             if not target.exists():
                 shutil.copy2(f, target)
                 logger.info("已复制内置引擎文件: %s", f.name)
-    # 配置文件（可编辑：用户可在数据目录调整）
-    for name in ("katago_gtp.cfg", "katago_analysis.cfg", "human_gtp.cfg"):
+    # 配置文件（可编辑：用户可在数据目录调整；GTP 对弈配置已随 AI 对弈删除）
+    for name in ("katago_analysis.cfg",):
         src_cfg = meipass / "katago" / name
         if src_cfg.exists():
             dst_cfg = _app_root() / "data" / "katago" / name
@@ -146,13 +145,6 @@ def _bundled_config(name: str) -> str:
     return str(BACKEND_DIR / "katago" / name)
 
 
-def gtp_config_path() -> str:
-    """GTP 配置路径（对弈）：绿色包走包内/数据目录；开发按配置。"""
-    if getattr(sys, "frozen", False):
-        return _bundled_config("katago_gtp.cfg")
-    return get_settings().katago_config
-
-
 def analysis_config_path() -> str:
     """Analysis 配置路径（局面分析）：绿色包走包内/数据目录；开发按配置。"""
     if getattr(sys, "frozen", False):
@@ -189,25 +181,6 @@ def list_available_models() -> list[dict]:
             }
         )
     return models
-
-
-def get_human_sl_model_path() -> str:
-    """Human-SL 对弈模型路径（不存在时抛 ValueError，提示安装）。"""
-    p = _models_dir() / f"{HUMAN_SL_MODEL_ID}.bin.gz"
-    if not p.exists():
-        raise ValueError(
-            f"Human-SL 对弈模型不存在: {p}。请确认 b18c384nbt-humanv0.bin.gz 已放入 models 目录。"
-        )
-    return str(p)
-
-
-def get_human_sl_model_path_checked() -> bool:
-    """Human-SL 对弈模型是否就绪（不抛异常，控制面板状态用）。"""
-    try:
-        get_human_sl_model_path()
-        return True
-    except ValueError:
-        return False
 
 
 def get_lan_ips() -> list[str]:
@@ -447,12 +420,20 @@ def get_current_model_path() -> str:
     for p in candidates:
         if model_id_from_filename(p.name) == model_id:
             return str(p)
-    # 回退：白名单内第一个可用模型
+    # 回退：白名单内第一个可用模型，并立即修正运行时状态与 .env
+    #（避免控制面板每 2 秒轮询时反复回退、反复刷告警日志）
     available = list_available_models()
     if available:
-        logger.warning(
-            "当前模型 %s 不存在，回退到 %s", model_id, available[0]["id"]
-        )
+        fallback_id = available[0]["id"]
+        global _current_model_id
+        if _current_model_id != fallback_id:
+            logger.warning(
+                "当前模型 %s 不存在，已回退并修正为 %s（.env 已更新）",
+                model_id,
+                fallback_id,
+            )
+            _current_model_id = fallback_id
+            _persist_env(fallback_id)
         return available[0]["path"]
     # 回退配置路径（保持与旧行为一致）
     return get_settings().katago_model
@@ -491,11 +472,9 @@ async def switch_model(model_id: str) -> dict:
     if model_id == get_current_model_id():
         return {"model": model_id, "changed": False, "message": "已是当前模型"}
 
-    # 停止两个引擎进程，下次请求惰性重启（使用新模型）
+    # 停止 Analysis 引擎进程，下次请求惰性重启（使用新模型）
     from app.services.katago_analysis import stop_katago_analysis
-    from app.services.katago_gtp import stop_katago_gtp
 
-    await stop_katago_gtp()
     await stop_katago_analysis()
 
     global _current_model_id

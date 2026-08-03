@@ -23,13 +23,9 @@ _PORT = 8000
 @router.get("/status")
 def admin_status() -> dict:
     """引擎/模型/网络连接状态（控制面板轮询用）。"""
-    from app.services.katago_gtp import is_any_gtp_running
-
     return {
         "status": "ok",
         "model": engine_manager.get_effective_model_id(),
-        "human_sl_ready": engine_manager.get_human_sl_model_path_checked(),
-        "gtp_running": is_any_gtp_running(),
         "lan_ips": engine_manager.get_lan_ips(),
         "tailscale_ip": engine_manager.get_tailscale_ip(),
         "port": _PORT,
@@ -44,19 +40,19 @@ def admin_logs(tail: int = 200) -> dict:
 
 @router.post("/engine/restart")
 async def admin_engine_restart() -> dict:
-    """停止 KataGo 引擎进程（下次请求自动惰性重启）。"""
-    from app.services.katago_gtp import stop_katago_gtp
+    """停止 KataGo 分析引擎进程（下次请求自动惰性重启）。"""
+    from app.services.katago_analysis import stop_katago_analysis
 
-    await stop_katago_gtp()
-    logger.info("控制面板：引擎已停止（下次请求自动重启）")
-    return {"ok": True, "message": "引擎已停止，下次请求自动重启"}
+    await stop_katago_analysis()
+    logger.info("控制面板：分析引擎已停止（下次请求自动重启）")
+    return {"ok": True, "message": "分析引擎已停止，下次请求自动重启"}
 
 
 @router.post("/engine/stop")
 async def admin_engine_stop() -> dict:
-    """停止 KataGo 引擎进程（保持后端服务运行）。"""
-    from app.services.katago_gtp import stop_katago_gtp
+    """停止 KataGo 分析引擎进程（保持后端服务运行）。"""
+    from app.services.katago_analysis import stop_katago_analysis
 
-    await stop_katago_gtp()
-    logger.info("控制面板：引擎已停止")
-    return {"ok": True, "message": "引擎已停止"}
+    await stop_katago_analysis()
+    logger.info("控制面板：分析引擎已停止")
+    return {"ok": True, "message": "分析引擎已停止"}

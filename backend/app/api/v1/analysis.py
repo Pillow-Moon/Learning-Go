@@ -43,6 +43,7 @@ async def _run_analysis(task_id: str, req: AnalysisRequest) -> None:
             req.board_size,
             req.komi,
             req.max_visits,
+            req.initial_stones,
             on_snapshot=_on_snapshot,
         )
         _tasks[task_id] = {"status": "done", "result": result, "error": None}

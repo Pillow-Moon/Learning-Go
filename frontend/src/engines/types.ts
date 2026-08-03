@@ -1,9 +1,7 @@
 /**
  * 围棋引擎抽象层：统一 browser（WASM）与 local（本地后端）两种引擎来源。
+ * 2026-08 精简：AI 对弈已删除，引擎只承担局面分析（analyze）职责。
  */
-
-import type { Player, Vertex } from '../lib/types'
-import type { AIStrengthId } from '../lib/strength'
 
 /** 局面分析查询参数 */
 export interface AnalysisQuery {
@@ -17,6 +15,11 @@ export interface AnalysisQuery {
   maxTime?: number
   /** 历史着法：[color, vertex] 或 [color, null]（pass） */
   moves: [string, [number, number] | null][]
+  /**
+   * 初始摆子（死活题等静态局面）：先摆子再按 moves 落子。
+   * KataGo 分析引擎 initialStones 协议，key 为 'B'/'W'。
+   */
+  initialStones?: { B?: [number, number][]; W?: [number, number][] }
 }
 
 /** 单个候选选点 */
@@ -48,11 +51,8 @@ export interface AnalysisResult {
   ownership?: number[] | null
 }
 
-/** AI 应手结果 */
-export interface GenmoveResult {
-  vertex: Vertex | null
-  coord: string | null // GTP 坐标，或 "pass"/"resign"
-}
+/** AI 应手结果（已随 AI 对弈删除） */
+export type GenmoveResult = never
 
 /** 引擎信息 */
 export interface EngineInfo {
@@ -67,7 +67,7 @@ export interface EngineInfo {
 export type EngineSource = 'browser' | 'local'
 
 /**
- * 围棋引擎统一接口。
+ * 围棋引擎统一接口（仅分析职责）。
  *
  * 实现者：
  * - WasmEngine（browser：KataGo WASM 在 Web Worker 内运行）
@@ -86,26 +86,10 @@ export interface GoEngine {
     onSnapshot?: (result: AnalysisResult) => void,
   ): Promise<AnalysisResult>
 
-  /** AI 生成一手棋（用于人机对弈） */
-  genmove(
-    color: Player,
-    boardSize: number,
-    komi: number,
-    maxVisits: number,
-    moves: [string, [number, number] | null][],
-  ): Promise<GenmoveResult>
-
   /**
-   * 设置本局 AI 强度档位（引擎模式统一入口）：
-   * - Local：Human-SL 档位（am20k~am7d）由后端切 rank 模式；pro 档走 visits
-   * - WASM：无 Human-SL，no-op（强度由调用方按 visits 计算）
-   */
-  setStrength(strengthId: AIStrengthId | null): void | Promise<void>
-
-  /**
-   * 取消排队中的局面分析（对弈 AI 落子前调用）：
-   * - WASM：worker 串行队列，取消未开始的普通分析并忽略进行中结果，避免阻塞落子
-   * - Local：分析走后端独立任务，不阻塞对弈，no-op
+   * 取消排队中的局面分析：
+   * - WASM：worker 串行队列，取消未开始的普通分析并忽略进行中结果
+   * - Local：分析走后端独立任务，不阻塞，no-op
    */
   cancelAnalysis(): void
 

@@ -4,23 +4,42 @@
  * 后端需先启动（双击 launcher.bat 或手动 uvicorn）。
  * 复用现有后端 API 接口：/api/v1/game/move、/api/v1/analysis。
  */
-import type {
-  AnalysisResult,
-  EngineInfo,
-  GenmoveResult,
-  GoEngine,
-} from './types'
-import type { Player } from '../lib/types'
-import type { AIStrengthId } from '../lib/strength'
+import type { AnalysisResult, EngineInfo, GoEngine } from './types'
 
 const BASE = '/api/v1'
+
+/**
+ * 后端分析响应归一化：后端输出 snake_case（score_lead），
+ * 前端类型统一 camelCase（scoreLead，与 WASM 引擎一致）。
+ * 同时过滤非法候选点（move 缺失）。
+ */
+function normalizeAnalysis(raw: unknown): AnalysisResult {
+  const r = raw as any
+  const mapCand = (c: any) => ({
+    move: c.move ?? null,
+    winrate: c.winrate ?? null,
+    scoreLead: c.scoreLead ?? c.score_lead ?? null,
+    visits: c.visits ?? null,
+    prior: c.prior ?? null,
+    pv: Array.isArray(c.pv) ? c.pv : [],
+  })
+  return {
+    boardSize: r.boardSize ?? r.board_size ?? 19,
+    candidates: Array.isArray(r.candidates) ? r.candidates.map(mapCand) : [],
+    root: {
+      winrate: r.root?.winrate ?? r.root_winrate ?? undefined,
+      scoreLead:
+        r.root?.scoreLead ?? r.root?.score_lead ?? r.root_score_lead ?? undefined,
+    },
+    ownership: r.ownership ?? null,
+    policy: r.policy ?? null,
+  }
+}
 
 export class LocalEngine implements GoEngine {
   private ready = false
   private model = 'local'
   private benchmarkScore = -1
-  /** 本局 AI 强度档位（开局设置；null = 未指定，后端按默认处理） */
-  private strengthId: AIStrengthId | null = null
 
   async init(): Promise<void> {
     try {
@@ -145,6 +164,7 @@ export class LocalEngine implements GoEngine {
       komi: number
       maxVisits: number
       moves: [string, [number, number] | null][]
+      initialStones?: { B?: [number, number][]; W?: [number, number][] }
     },
     onSnapshot?: (result: AnalysisResult) => void,
   ): Promise<AnalysisResult> {
@@ -162,6 +182,7 @@ export class LocalEngine implements GoEngine {
           color,
           vertex,
         })),
+        initial_stones: query.initialStones,
       }),
     })
 
@@ -171,20 +192,8 @@ export class LocalEngine implements GoEngine {
 
     const { task_id } = await submitResp.json()
 
-    // 后端按 reportAnalysisWinratesAs=BLACK 输出黑方胜率，
-    // 统一翻转为「当前玩家视角」（与 wasm 引擎一致）
-    const currentIsWhite = query.moves.length % 2 === 1 // 黑先，奇数手后轮到白
-    const flip = (r: AnalysisResult): AnalysisResult => {
-      if (r?.root?.winrate != null) {
-        r.root.winrate = 1 - r.root.winrate
-      }
-      for (const c of r?.candidates ?? []) {
-        if (c.winrate != null) c.winrate = 1 - c.winrate
-      }
-      return r
-    }
-    const toPlayerView = (r: AnalysisResult): AnalysisResult =>
-      currentIsWhite ? flip(r) : r
+    // 后端按 reportAnalysisWinratesAs=BLACK 输出：winrate 恒为黑方胜率、
+    // root/candidates 的 score_lead 恒为黑方视角（正=黑领先）。统一原样透传。
 
     // 轮询直到完成
     // 大模型（如 b11c768h12，212MB）首次分析需加载权重到 GPU，可能耗时数分钟，
@@ -197,11 +206,11 @@ export class LocalEngine implements GoEngine {
       }
       const status = await statusResp.json()
       if (status.status === 'done' && status.result) {
-        return toPlayerView(status.result as AnalysisResult)
+        return normalizeAnalysis(status.result)
       }
       // 中间快照：status=running 且已有 result 时增量回调
       if (status.status === 'running' && status.result) {
-        onSnapshot?.(toPlayerView(status.result as AnalysisResult))
+        onSnapshot?.(normalizeAnalysis(status.result))
       }
       if (status.status === 'error') {
         throw new Error(status.error ?? '分析失败')
@@ -211,45 +220,8 @@ export class LocalEngine implements GoEngine {
 
     throw new Error('分析超时（超过 120 秒）')
   }
-
-  async genmove(
-    color: Player,
-    boardSize: number,
-    komi: number,
-    maxVisits: number,
-    moves: [string, [number, number] | null][],
-  ): Promise<GenmoveResult> {
-    this.ensureReady()
-
-    const dtoMoves = moves.map(([c, v]) => ({
-      // color 可为 'B'/'W' (string) 或 1/-1 (Player number)
-      color: c === 'B' || String(c) === '1' ? 'B' : 'W',
-      vertex: v,
-    }))
-
-    const resp = await fetch(`${BASE}/game/move`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        board_size: boardSize,
-        komi,
-        max_visits: maxVisits,
-        moves: dtoMoves,
-        ai_color: color === 1 ? 'B' : 'W',
-        strength_id: this.strengthId ?? undefined,
-      }),
-    })
-
-    if (!resp.ok) {
-      const errText = await resp.text().catch(() => '')
-      throw new Error(`AI 应手请求失败: ${resp.status} ${errText}`)
-    }
-
-    const data = await resp.json()
-    return {
-      vertex: data.ai_move as [number, number] | null,
-      coord: data.ai_move_coord ?? null,
-    }
+  async genmove(): Promise<never> {
+    throw new Error('AI 对弈已移除：对局请使用星阵等外部平台，本平台专注复盘')
   }
 
   destroy(): void {
@@ -257,12 +229,7 @@ export class LocalEngine implements GoEngine {
   }
 
   cancelAnalysis(): void {
-    // Local 分析走后端独立任务（/analysis 任务表 + 轮询），不阻塞对弈落子，无需取消
-  }
-
-  setStrength(strengthId: AIStrengthId | null): void {
-    // 后端按 strength_id 决定模式：Human-SL 档位（am20k~am7d）切 rank，pro 档走 visits
-    this.strengthId = strengthId
+    // Local 分析走后端独立任务（/analysis 任务表 + 轮询），无需取消
   }
 
   private ensureReady(): void {

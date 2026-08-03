@@ -1,33 +1,27 @@
 /**
  * 全局设置状态（Zustand + localStorage 持久化）。
  *
- * 管理：引擎来源、LLM provider 配置、API key、设备基准分数。
+ * 管理：引擎来源、设备基准分数、棋盘/棋子/主题。
  */
 import { create } from 'zustand'
 import type { EngineSource } from '../engines/types'
 import { getBoardTheme, getStoneStyle, type BoardThemeId, type StoneStyleId } from '../lib/boardThemes'
 
-/** LLM Provider 配置 */
-export interface LLMProvider {
-  id: string
-  name: string
-  baseURL: string
-  defaultModel: string
-  model: string
-  apiKey: string
-}
-
 /** 网页版 WASM 可用模型 ID（模型收敛：只保留 b6c96 轻量兜底模型） */
 export type WasmModelId = 'b6c96'
 
-/** WASM 模型选项（设置页展示用） */
-export const WASM_MODEL_OPTIONS: {
-  id: WasmModelId
-  label: string
-  desc: string
-}[] = [
-  { id: 'b6c96', label: 'b6c96', desc: '6x96 轻量模型' },
+/** LLM 默认配置（DeepSeek OpenAI 兼容端点） */
+export const DEFAULT_LLM_BASE_URL = 'https://api.deepseek.com/v1'
+export const DEFAULT_LLM_MODEL = 'deepseek-chat'
+
+/** 常用 LLM 模型选项（设置页下拉） */
+export const LLM_MODEL_OPTIONS: { id: string; label: string; desc: string }[] = [
+  { id: 'deepseek-chat', label: 'DeepSeek-V3', desc: 'DeepSeek 官方（性价比高，中文好）' },
+  { id: 'deepseek-reasoner', label: 'DeepSeek-R1', desc: 'DeepSeek 推理模型（更慢更贵）' },
+  { id: 'gpt-4o-mini', label: 'GPT-4o-mini', desc: 'OpenAI 轻量（需自备代理）' },
+  { id: 'glm-4-flash', label: 'GLM-4-Flash', desc: '智谱免费档（需 baseURL 指向智谱）' },
 ]
+
 
 interface SettingsState {
   /** 引擎来源 */
@@ -36,10 +30,6 @@ interface SettingsState {
   localBackendURL: string
   /** WASM 引擎模型 */
   wasmModel: WasmModelId
-  /** 所有 LLM provider */
-  providers: LLMProvider[]
-  /** 当前激活的 provider ID */
-  activeProviderId: string
   /** Local GPU 实测基准分数（visits/s，-1=未测试） */
   localBenchmarkScore: number
   /** WASM 实测基准分数（visits/s，-1=未测试；切换模型时按缓存回填） */
@@ -52,6 +42,14 @@ interface SettingsState {
   stoneStyle: StoneStyleId
   /** 界面夜间模式 */
   uiTheme: 'light' | 'dark'
+  /** 用户业余级位（1~25，数字越小越强；诊断训练处方使用，默认 7） */
+  userLevel: number
+  /** BYOK LLM：密钥（仅存 localStorage，直连用户配置的 baseURL） */
+  llmApiKey: string
+  /** BYOK LLM：OpenAI 兼容端点 */
+  llmBaseURL: string
+  /** BYOK LLM：模型名 */
+  llmModel: string
 
   // 操作
   setEngineSource: (source: EngineSource) => void
@@ -61,13 +59,13 @@ interface SettingsState {
   recordWasmBenchmark: (model: WasmModelId, score: number) => void
   /** 切换 WASM 模型后回填该模型已测分数（未测则为 -1） */
   applyWasmModel: (model: WasmModelId) => void
-  addProvider: (p: LLMProvider) => void
-  updateProvider: (id: string, patch: Partial<LLMProvider>) => void
-  removeProvider: (id: string) => void
-  setActiveProvider: (id: string) => void
   setBoardTheme: (id: BoardThemeId) => void
   setStoneStyle: (id: StoneStyleId) => void
   setUiTheme: (theme: 'light' | 'dark') => void
+  setUserLevel: (level: number) => void
+  setLlmApiKey: (key: string) => void
+  setLlmBaseURL: (url: string) => void
+  setLlmModel: (model: string) => void
 }
 
 /** 从 localStorage 恢复持久化字段 */
@@ -87,16 +85,24 @@ function persist(state: SettingsState): void {
     engineSource: state.engineSource,
     localBackendURL: state.localBackendURL,
     wasmModel: state.wasmModel,
-    providers: state.providers,
-    activeProviderId: state.activeProviderId,
     localBenchmarkScore: state.localBenchmarkScore,
     wasmBenchmarkScore: state.wasmBenchmarkScore,
     wasmBenchmarkByModel: state.wasmBenchmarkByModel,
     boardTheme: state.boardTheme,
     stoneStyle: state.stoneStyle,
     uiTheme: state.uiTheme,
+    userLevel: state.userLevel,
+    llmApiKey: state.llmApiKey,
+    llmBaseURL: state.llmBaseURL,
+    llmModel: state.llmModel,
   }
   localStorage.setItem('learning-go-settings', JSON.stringify(toSave))
+}
+
+/** 级位范围校验（1~25，数字越小越强） */
+function clampLevel(level: number): number {
+  if (!Number.isFinite(level)) return 7
+  return Math.max(1, Math.min(25, Math.round(level)))
 }
 
 const persisted = loadPersisted()
@@ -107,14 +113,16 @@ export const useSettingsStore = create<SettingsState>((set, get) => ({
   engineSource: persisted.engineSource ?? 'browser',
   localBackendURL: persisted.localBackendURL ?? '/api/v1',
   wasmModel: persisted.wasmModel ?? 'b6c96',
-  providers: persisted.providers ?? [],
-  activeProviderId: persisted.activeProviderId ?? '',
   localBenchmarkScore: persisted.localBenchmarkScore ?? legacyScore ?? -1,
   wasmBenchmarkScore: persisted.wasmBenchmarkScore ?? -1,
   wasmBenchmarkByModel: persisted.wasmBenchmarkByModel ?? {},
   boardTheme: getBoardTheme(persisted.boardTheme ?? 'plain').id,
-  stoneStyle: getStoneStyle(persisted.stoneStyle ?? 'slate-shell').id,
+  stoneStyle: getStoneStyle(persisted.stoneStyle ?? 'plain').id,
   uiTheme: persisted.uiTheme === 'dark' ? 'dark' : 'light',
+  userLevel: clampLevel(persisted.userLevel ?? 7),
+  llmApiKey: persisted.llmApiKey ?? '',
+  llmBaseURL: persisted.llmBaseURL ?? DEFAULT_LLM_BASE_URL,
+  llmModel: persisted.llmModel ?? DEFAULT_LLM_MODEL,
 
   setEngineSource: (source) => {
     set({ engineSource: source })
@@ -144,37 +152,6 @@ export const useSettingsStore = create<SettingsState>((set, get) => ({
     persist(get())
   },
 
-  addProvider: (p) => {
-    const providers = [...get().providers, p]
-    const activeProviderId = get().activeProviderId || p.id
-    set({ providers, activeProviderId })
-    persist(get())
-  },
-
-  updateProvider: (id, patch) => {
-    set({
-      providers: get().providers.map((p) =>
-        p.id === id ? { ...p, ...patch } : p,
-      ),
-    })
-    persist(get())
-  },
-
-  removeProvider: (id) => {
-    const providers = get().providers.filter((p) => p.id !== id)
-    const activeProviderId =
-      get().activeProviderId === id
-        ? providers[0]?.id ?? ''
-        : get().activeProviderId
-    set({ providers, activeProviderId })
-    persist(get())
-  },
-
-  setActiveProvider: (id) => {
-    set({ activeProviderId: id })
-    persist(get())
-  },
-
   setBoardTheme: (id) => {
     set({ boardTheme: id })
     persist(get())
@@ -186,6 +163,22 @@ export const useSettingsStore = create<SettingsState>((set, get) => ({
   },
   setUiTheme: (theme) => {
     set({ uiTheme: theme })
+    persist(get())
+  },
+  setUserLevel: (level) => {
+    set({ userLevel: clampLevel(level) })
+    persist(get())
+  },
+  setLlmApiKey: (key) => {
+    set({ llmApiKey: key })
+    persist(get())
+  },
+  setLlmBaseURL: (url) => {
+    set({ llmBaseURL: url })
+    persist(get())
+  },
+  setLlmModel: (model) => {
+    set({ llmModel: model })
     persist(get())
   },
 }))

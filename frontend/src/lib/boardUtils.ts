@@ -56,3 +56,21 @@ export function vertexToCoord(vertex: Vertex, size: number): string {
   const [x, y] = vertex
   return `${columnLabel(x)}${rowLabel(y, size)}`
 }
+
+/**
+ * 构造引擎着法序列：让子（黑）作为前缀，之后按实战着法。
+ * KataGo 通过着法序列重建棋盘，让子必须以黑方落子形式告知。
+ */
+export function buildEngineMoves(
+  moves: { color: number; vertex: Vertex | null }[],
+  handicapStones?: Vertex[],
+): [string, [number, number] | null][] {
+  const prefix: [string, [number, number] | null][] = (handicapStones ?? []).map(
+    (v) => ['B', v],
+  )
+  const seq: [string, [number, number] | null][] = moves.map((m) => [
+    m.color === 1 ? 'B' : 'W',
+    m.vertex,
+  ])
+  return [...prefix, ...seq]
+}

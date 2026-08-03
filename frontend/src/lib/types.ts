@@ -12,12 +12,9 @@ export type Player = 1 | -1
 /** 对局状态机 */
 export type GameStatus =
   | 'idle' // 未开始
-  | 'playing' // 进行中（等待用户落子）
-  | 'waiting_ai' // 等待 AI 生成应手
+  | 'playing' // 进行中（等待落子）
+  | 'scoring' // 双方虚手，等待点目确认
   | 'finished' // 已结束
-
-/** 对局模式 */
-export type GameMode = 'human_vs_human' | 'human_vs_ai'
 
 /** 一手棋记录 */
 export interface Move {

@@ -24,9 +24,8 @@ export default defineConfig(({ command }) => ({
     },
     proxy: {
       // 本地 GPU 引擎（可选）：前端 /api 请求转发到 FastAPI 后端
-      // 注意：临时用 8001 端口（8000 被一个孤儿监听 socket 占用，需重启系统清理后改回）
       '/api': {
-        target: 'http://127.0.0.1:8001',
+        target: 'http://127.0.0.1:8000',
         changeOrigin: true,
       },
     },

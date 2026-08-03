@@ -30,9 +30,10 @@ export function parseSgf(sgf: string): ParsedSgf {
   const plMatch = sgf.match(/PL\[(B|W)\]/)
   const playerToMove: Player = plMatch && plMatch[1] === 'W' ? -1 : 1
 
-  const board = GoBoard.fromDimensions(boardSize, boardSize)
-  for (const v of extractStones(sgf, 'AB')) board.set(v, 1)
-  for (const v of extractStones(sgf, 'AW')) board.set(v, -1)
+  // @sabaki/go-board 为 immutable：set 返回新棋盘，必须接收返回值
+  let board = GoBoard.fromDimensions(boardSize, boardSize)
+  for (const v of extractStones(sgf, 'AB')) board = board.set(v, 1)
+  for (const v of extractStones(sgf, 'AW')) board = board.set(v, -1)
 
   return { board, boardSize, playerToMove }
 }

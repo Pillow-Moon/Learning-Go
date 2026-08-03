@@ -6,7 +6,7 @@
 import { beforeEach, describe, expect, it } from 'vitest'
 
 import { useSettingsStore } from './settingsStore'
-import { estimateTime, kyuRankFor } from '../lib/strength'
+import { estimateTime } from '../lib/strength'
 
 /** 最小 localStorage mock（node 环境无 localStorage，persist 依赖它） */
 const mem: Record<string, string> = {}
@@ -54,34 +54,6 @@ describe('estimateTime', () => {
 
   it('档位倍率生效', () => {
     expect(estimateTime(8, 4, '手')).toBe('每手约 32 秒')
-  })
-})
-
-describe('kyuRankFor（KaTrain 校准级数推导）', () => {
-  it('级位：amXk → X（am20k→20 … am1k→1）', () => {
-    expect(kyuRankFor('am20k')).toBe(20)
-    expect(kyuRankFor('am18k')).toBe(18)
-    expect(kyuRankFor('am10k')).toBe(10)
-    expect(kyuRankFor('am4k')).toBe(4)
-    expect(kyuRankFor('am1k')).toBe(1)
-  })
-
-  it('段位：amXd → 1-X（am1d→0 … am5d→-4，KaTrain 校准上限）', () => {
-    expect(kyuRankFor('am1d')).toBe(0)
-    expect(kyuRankFor('am2d')).toBe(-1)
-    expect(kyuRankFor('am3d')).toBe(-2)
-    expect(kyuRankFor('am5d')).toBe(-4)
-  })
-
-  it('超出 KaTrain 校准范围（6 段及以上）不注入', () => {
-    expect(kyuRankFor('am6d')).toBeNull()
-    expect(kyuRankFor('am7d')).toBeNull()
-  })
-
-  it('pro 档与空值不注入', () => {
-    expect(kyuRankFor('pro1d')).toBeNull()
-    expect(kyuRankFor('pro9d')).toBeNull()
-    expect(kyuRankFor(null)).toBeNull()
   })
 })
 
