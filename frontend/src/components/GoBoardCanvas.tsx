@@ -1,8 +1,8 @@
 /**
  * 自绘 Canvas 围棋棋盘。
  *
- * 职责：纯渲染 + 鼠标交互。规则判断全部交给上层（gameStore / @sabaki/go-board）。
- * 支持 9/13/19 路、坐标标注、星位、悬停预览、最后一手标记、分析候选叠加、高 DPI。
+ * 职责：纯渲染 + 鼠标交互。规则判断全部交给上层（@sabaki/go-board 规则引擎）。
+ * 支持 9/13/19 路、坐标标注、星位、悬停预览、最后一手标记、分析候选叠加、变化图、领地渐变、高 DPI。
  */
 import { useEffect, useRef, useState } from 'react'
 import type GoBoard from '@sabaki/go-board'
@@ -34,6 +34,8 @@ interface Props {
   ownership?: number[] | null
   /** 变化图高亮顶点序列 */
   highlights?: Vertex[] | null
+  /** 变化图第一手颜色（调用方传当前执子方；缺省时序列按黑先交替） */
+  highlightFirstColor?: Player
   onPlay?: (vertex: Vertex) => void
 }
 
@@ -48,6 +50,7 @@ export default function GoBoardCanvas({
   candidates,
   ownership,
   highlights,
+  highlightFirstColor = 1,
   onPlay,
 }: Props) {
   const canvasRef = useRef<HTMLCanvasElement>(null)
@@ -183,9 +186,9 @@ export default function GoBoardCanvas({
       drawCandidates(ctx, candidates, board, toPixel, cellSize, theme)
     }
 
-    // 变化图高亮（带顺序编号）
+    // 变化图高亮（半透明黑白棋 + 顺序编号）
     if (highlights && highlights.length > 0) {
-      drawHighlights(ctx, highlights, toPixel, cellSize, theme)
+      drawHighlights(ctx, highlights, toPixel, cellSize, theme, highlightFirstColor)
     }
 
     // 最后一手标记
@@ -209,7 +212,7 @@ export default function GoBoardCanvas({
         ctx.globalAlpha = 1
       }
     }
-  }, [board, boardSize, lastMove, hover, currentPlayer, interactive, size, cellSize, candidates, ownership, highlights, theme, stoneStyle])
+  }, [board, boardSize, lastMove, hover, currentPlayer, interactive, size, cellSize, candidates, ownership, highlights, highlightFirstColor, theme, stoneStyle])
 
   const handleMove = (e: React.MouseEvent<HTMLCanvasElement>) => {
     if (!interactive) return
@@ -358,26 +361,41 @@ function isDarkBoard(theme: BoardTheme): boolean {
   return 0.299 * r + 0.587 * g + 0.114 * b < 140
 }
 
-/** 绘制变化图高亮（半透明圆 + 顺序编号） */
+/**
+ * 绘制变化图高亮：半透明黑白棋 + 顺序编号（1、2、3…）。
+ * 颜色按序列奇偶交替（第一手 = firstColor，即当前执子方），
+ * 黑棋上白字、白棋上黑字，保证编号清晰可辨。
+ */
 function drawHighlights(
   ctx: CanvasRenderingContext2D,
   highlights: Vertex[],
   toPixel: (v: Vertex) => [number, number],
   cellSize: number,
   theme: BoardTheme,
+  firstColor: Player,
 ) {
-  const dark = isDarkBoard(theme)
   ctx.save()
   ctx.textAlign = 'center'
   ctx.textBaseline = 'middle'
   highlights.forEach((v, idx) => {
     const [px, py] = toPixel(v)
-    ctx.fillStyle = 'rgba(220,120,0,0.35)'
+    const color: Player = idx % 2 === 0 ? firstColor : ((firstColor * -1) as Player)
+    const radius = cellSize * 0.46
+
+    // 半透明棋子（纯色圆 + 同色描边；不调 drawStone，避免阴影叠加导致视觉杂乱）
+    ctx.globalAlpha = 0.55
+    ctx.fillStyle = color === 1 ? '#1a1a1a' : '#f5f5f5'
     ctx.beginPath()
-    ctx.arc(px, py, cellSize * 0.42, 0, Math.PI * 2)
+    ctx.arc(px, py, radius, 0, Math.PI * 2)
     ctx.fill()
-    ctx.fillStyle = dark ? '#ffd9a0' : '#7a3b00'
-    ctx.font = `bold ${Math.max(10, cellSize * 0.34)}px sans-serif`
+    ctx.lineWidth = Math.max(1, cellSize * 0.05)
+    ctx.strokeStyle = theme.line
+    ctx.stroke()
+
+    // 顺序编号（黑棋上白字、白棋上黑字）
+    ctx.globalAlpha = 0.95
+    ctx.fillStyle = color === 1 ? '#ffffff' : '#1a1a1a'
+    ctx.font = `bold ${Math.max(10, cellSize * 0.32)}px sans-serif`
     ctx.fillText(String(idx + 1), px, py)
   })
   ctx.restore()

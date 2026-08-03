@@ -7,6 +7,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { useSearchParams } from 'react-router-dom'
 import { useShallow } from 'zustand/react/shallow'
+import ReactMarkdown from 'react-markdown'
 import GoBoardCanvas from '../../components/GoBoardCanvas'
 import WinrateChart from '../../components/WinrateChart'
 import { useReviewStore, buildBoardFromMoves } from '../../stores/reviewStore'
@@ -48,6 +49,7 @@ export default function Study2Page() {
     candidates,
     rootWinrate,
     rootScoreLead,
+    ownership,
     analyzing,
     analyzedMoveCount,
     analyze,
@@ -65,6 +67,7 @@ export default function Study2Page() {
   const [importError, setImportError] = useState<string | null>(null)
   const [msg, setMsg] = useState<string | null>(null)
   const [komiOpt, setKomiOpt] = useState(7.5)
+  const [territoryOn, setTerritoryOn] = useState(false)
   const fileRef = useRef<HTMLInputElement>(null)
 
   const { boardSize, komi, moves, moveIndex, points, analysisStatus, analyzedCount } = review
@@ -376,6 +379,16 @@ export default function Study2Page() {
                 ))}
               </select>
             </div>
+            <div className="v2-opt-row">
+              <label className="v2-opt-check">
+                <input
+                  type="checkbox"
+                  checked={territoryOn}
+                  onChange={(e) => setTerritoryOn(e.target.checked)}
+                />
+                显示领地（实地预测）
+              </label>
+            </div>
             {/* 整盘分析（复盘能力） */}
             <div className="v2-actions" style={{ gridTemplateColumns: '1fr' }}>
               <button
@@ -427,8 +440,9 @@ export default function Study2Page() {
               lastMove={lastVertex}
               interactive={moveIndex === total}
               candidates={tab === 'cand' ? showCandidates : null}
-              ownership={null}
+              ownership={territoryOn ? ownership : null}
               highlights={showHighlights}
+              highlightFirstColor={curPlayer}
               onPlay={(v) => {
                 if (review.appendMove(v)) flash('已摆子')
               }}
@@ -589,7 +603,9 @@ export default function Study2Page() {
                 {commentary ? (
                   <div className="v2-comment">
                     <div className="v2-comment-title">AI 解说 · 第 {Math.max(1, moveIndex)} 手</div>
-                    <div className="v2-comment-text">{commentary}</div>
+                    <div className="v2-comment-text">
+                      <ReactMarkdown>{commentary}</ReactMarkdown>
+                    </div>
                   </div>
                 ) : (
                   <div className="v2-empty">分析当前局面后生成解说</div>

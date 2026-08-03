@@ -98,7 +98,7 @@ export default function JosekiBrowsePage() {
 
   return (
     <div className="v2-page">
-      <div className="v2-layout study" style={{ gridTemplateColumns: '200px minmax(500px, 1fr) 320px' }}>
+      <div className="v2-layout study">
         {/* ===== 左栏：家族 + 定式簇 ===== */}
         <aside className="v2-col v2-left">
           <div className="v2-panel">

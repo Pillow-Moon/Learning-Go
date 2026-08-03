@@ -1,12 +1,11 @@
 /**
  * 应用根组件：路由 + 顶部导航。
- * 精简版：首页/对弈/研究（含复盘二级菜单）/定式/设置。
+ * 精简版：首页/研究/诊断/定式/设置（AI 对弈已删除，对局使用星阵等外部平台）。
  */
 import { useEffect, useState } from 'react'
 import { Link, Navigate, Route, Routes, useLocation } from 'react-router-dom'
 
 import Home2Page from './alt2/pages/Home2Page'
-import Play2Page from './alt2/pages/Play2Page'
 import Study2Page from './alt2/pages/Study2Page'
 import Diagnosis2Page from './alt2/pages/Diagnosis2Page'
 // 综合版三栏布局补充样式
@@ -105,7 +104,6 @@ function TopNav() {
   return (
     <nav className="nav">
       {item('/', '首页')}
-      {item('/play', '对弈')}
       {item('/study', '研究')}
       {item('/diagnosis', '诊断')}
       {item('/joseki', '定式')}
@@ -158,7 +156,6 @@ export default function App() {
         <main className="main">
           <Routes>
             <Route path="/" element={<Home2Page />} />
-            <Route path="/play" element={<Play2Page />} />
             <Route path="/study" element={<Study2Page />} />
             {/* 复盘已并入研究页，旧链接重定向 */}
             <Route path="/study/review" element={<Navigate to="/study" replace />} />
