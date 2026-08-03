@@ -30,6 +30,8 @@
  *   单次分析耗时 ≈ createKataGo(~0.5-1s) + NN 初始化(文本模型 ~2s) + 搜索。
  */
 
+import { cancelQueuedTasks, enqueueTask } from './taskQueue'
+
 // ---------------------------------------------------------------------------
 // Types
 // ---------------------------------------------------------------------------
@@ -389,45 +391,8 @@ async function runAnalysis(
 
 // ---------------------------------------------------------------------------
 // Message handler（任务队列：支持取消与对弈优先插队）
+// 队列逻辑在 ./taskQueue（纯逻辑，单元测试覆盖）
 // ---------------------------------------------------------------------------
-
-/**
- * 队列任务。
- * - urgent（对弈落子）：插入队首，且不受 cancel 影响（AI 落子优先）
- * - normal（局面分析）：可被 cancel 取消；正在运行的无法中断（单次 callMain
- *   架构限制），其结果会被主线程端忽略
- */
-interface QueuedTask {
-  id: string
-  urgent: boolean
-  cancelled: boolean
-  run: () => Promise<void>
-}
-
-let taskQueue: QueuedTask[] = []
-let pumping = false
-
-/** 串行执行队列（同一时刻只有一个 callMain 在跑） */
-async function pumpQueue(): Promise<void> {
-  if (pumping) return
-  pumping = true
-  while (taskQueue.length > 0) {
-    const task = taskQueue.shift()!
-    if (task.cancelled) continue
-    try {
-      await task.run()
-    } catch {
-      // run 内部已上报错误（postMessage error），这里兜底避免队列中断
-    }
-  }
-  pumping = false
-}
-
-function enqueueTask(task: QueuedTask): void {
-  if (task.urgent) taskQueue.unshift(task)
-  else taskQueue.push(task)
-  void pumpQueue()
-}
 
 self.onmessage = async (e: MessageEvent) => {
   const { type } = e.data as {
@@ -497,9 +462,7 @@ self.onmessage = async (e: MessageEvent) => {
 
   // ----- cancel：取消所有排队中的普通分析（对弈落子前调用） -----
   if (type === 'cancel') {
-    for (const t of taskQueue) {
-      if (!t.urgent) t.cancelled = true
-    }
+    cancelQueuedTasks()
     return
   }
 

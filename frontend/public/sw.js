@@ -53,7 +53,7 @@ self.addEventListener('fetch', (event) => {
       })
       .catch(() => {
         // 网络失败时从缓存恢复
-        return caches.match(event.request) as Promise<Response>
+        return caches.match(event.request)
       }),
   )
 })

@@ -20,6 +20,13 @@ export interface AnalysisQuery {
    * KataGo 分析引擎 initialStones 协议，key 为 'B'/'W'。
    */
   initialStones?: { B?: [number, number][]; W?: [number, number][] }
+  /**
+   * Cross-stack correlation id (optional): shared between the frontend console
+   * and backend logs so the same analysis stays traceable across engine sources.
+   * Generated per call when absent; the Local engine forwards it as
+   * `correlation_id` in the request body, the WASM engine only logs it.
+   */
+  correlationId?: string
 }
 
 /** 单个候选选点 */

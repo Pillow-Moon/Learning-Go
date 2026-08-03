@@ -28,7 +28,7 @@ router = APIRouter(prefix="/analysis", tags=["analysis"])
 _tasks: dict[str, dict] = {}
 
 
-async def _run_analysis(task_id: str, req: AnalysisRequest) -> None:
+async def _run_analysis(task_id: str, correlation_id: str | None, req: AnalysisRequest) -> None:
     try:
         engine = get_katago_analysis()
         moves = [(m.color, m.vertex) for m in req.moves]
@@ -45,10 +45,22 @@ async def _run_analysis(task_id: str, req: AnalysisRequest) -> None:
             req.max_visits,
             req.initial_stones,
             on_snapshot=_on_snapshot,
+            correlation_id=correlation_id,
         )
         _tasks[task_id] = {"status": "done", "result": result, "error": None}
+        logger.info(
+            "分析完成: task_id=%s correlation_id=%s status=done",
+            task_id,
+            correlation_id,
+        )
     except Exception as exc:  # noqa: BLE001
-        logger.error("分析任务失败: %s", exc, exc_info=True)
+        logger.error(
+            "分析任务失败: task_id=%s correlation_id=%s: %s",
+            task_id,
+            correlation_id,
+            exc,
+            exc_info=True,
+        )
         _tasks[task_id] = {"status": "error", "result": None, "error": f"{type(exc).__name__}: {exc!r}"}
 
 
@@ -58,7 +70,12 @@ async def submit_analysis(
 ) -> AnalysisTaskResponse:
     task_id = uuid.uuid4().hex[:12]
     _tasks[task_id] = {"status": "pending", "result": None, "error": None}
-    background_tasks.add_task(_run_analysis, task_id, req)
+    logger.info(
+        "分析请求入队: task_id=%s correlation_id=%s status=pending",
+        task_id,
+        req.correlation_id,
+    )
+    background_tasks.add_task(_run_analysis, task_id, req.correlation_id, req)
     return AnalysisTaskResponse(task_id=task_id, status="pending")
 
 

@@ -38,6 +38,10 @@ def install_ring_buffer() -> None:
     因此需要直接挂到 uvicorn.* logger 上（startup 时再次调用以覆盖 dictConfig 重置）。
     """
     root = logging.getLogger()
+    # uvicorn log_config=None 时 root 默认 WARNING，会吞掉应用 INFO 日志；
+    # 环形缓冲设计目标是全应用日志（含分析任务入队/完成等 INFO），放行 INFO。
+    if root.level == logging.WARNING:
+        root.setLevel(logging.INFO)
     if not any(isinstance(h, RingBufferHandler) for h in root.handlers):
         root.addHandler(_ring)
     for name in ("uvicorn", "uvicorn.error", "uvicorn.access"):

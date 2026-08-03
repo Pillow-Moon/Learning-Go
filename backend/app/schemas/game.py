@@ -47,6 +47,10 @@ class AnalysisRequest(BaseModel):
     moves: list[MoveIn] = Field(default_factory=list)
     # 初始摆子（死活题等静态局面）：{"B": [[x,y], ...], "W": [...]}，引擎先摆子再按 moves 落子
     initial_stones: dict[str, list[tuple[int, int]]] | None = None
+    # Cross-stack correlation id forwarded from the frontend (optional,
+    # backward compatible): echoed into logs so the same analysis can be
+    # traced from the frontend console to the backend log across engine sources.
+    correlation_id: str | None = None
 
 
 class Candidate(BaseModel):

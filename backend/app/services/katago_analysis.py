@@ -135,6 +135,7 @@ class KataGoAnalysis:
         max_visits: int = 100,
         initial_stones: dict | None = None,
         on_snapshot: Callable[[dict], Awaitable[None]] | None = None,
+        correlation_id: str | None = None,
     ) -> dict:
         """分析当前局面。
 
@@ -160,6 +161,12 @@ class KataGoAnalysis:
             assert self.proc and self.proc.stdin and self.proc.stdout
 
             query_id = f"q{next(_id_counter)}"
+            logger.info(
+                "[analysis] query=%s correlation_id=%s submitted moves=%d",
+                query_id,
+                correlation_id or "-",
+                len(moves),
+            )
             # 构造 moves：[[ "B", "Q16" ], ...]，pass 用 "pass"（空字符串会导致
             # KataGo 报 "Could not parse board location"）
             move_list = []
@@ -222,6 +229,11 @@ class KataGoAnalysis:
                         done = True
                         break
 
+            logger.info(
+                "[analysis] query=%s correlation_id=%s done",
+                query_id,
+                correlation_id or "-",
+            )
             assert last is not None
             return last
 

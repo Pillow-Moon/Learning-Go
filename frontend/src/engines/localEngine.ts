@@ -5,6 +5,7 @@
  * 复用现有后端 API 接口：/api/v1/game/move、/api/v1/analysis。
  */
 import type { AnalysisResult, EngineInfo, GoEngine } from './types'
+import { newCorrelationId } from '../lib/correlationId'
 
 const BASE = '/api/v1'
 
@@ -165,10 +166,17 @@ export class LocalEngine implements GoEngine {
       maxVisits: number
       moves: [string, [number, number] | null][]
       initialStones?: { B?: [number, number][]; W?: [number, number][] }
+      correlationId?: string
     },
     onSnapshot?: (result: AnalysisResult) => void,
   ): Promise<AnalysisResult> {
     this.ensureReady()
+    // Cross-stack correlation id: forwarded to the backend, which echoes it
+    // into its logs so the same analysis links frontend console and backend log.
+    const correlationId = query.correlationId ?? newCorrelationId()
+    console.log(
+      `[Analysis] start id=${correlationId} source=local moves=${query.moves.length} board=${query.boardSize}`,
+    )
 
     // 提交分析任务
     const submitResp = await fetch(`${BASE}/analysis`, {
@@ -183,14 +191,17 @@ export class LocalEngine implements GoEngine {
           vertex,
         })),
         initial_stones: query.initialStones,
+        correlation_id: correlationId,
       }),
     })
 
     if (!submitResp.ok) {
+      console.log(`[Analysis] fail id=${correlationId} source=local submit status=${submitResp.status}`)
       throw new Error(`分析请求失败: ${submitResp.status}`)
     }
 
     const { task_id } = await submitResp.json()
+    console.log(`[Analysis] id=${correlationId} source=local task_id=${task_id}`)
 
     // 后端按 reportAnalysisWinratesAs=BLACK 输出：winrate 恒为黑方胜率、
     // root/candidates 的 score_lead 恒为黑方视角（正=黑领先）。统一原样透传。
@@ -206,6 +217,7 @@ export class LocalEngine implements GoEngine {
       }
       const status = await statusResp.json()
       if (status.status === 'done' && status.result) {
+        console.log(`[Analysis] done id=${correlationId} source=local task_id=${task_id}`)
         return normalizeAnalysis(status.result)
       }
       // 中间快照：status=running 且已有 result 时增量回调
@@ -213,6 +225,7 @@ export class LocalEngine implements GoEngine {
         onSnapshot?.(normalizeAnalysis(status.result))
       }
       if (status.status === 'error') {
+        console.log(`[Analysis] fail id=${correlationId} source=local task_id=${task_id} error=${status.error ?? '分析失败'}`)
         throw new Error(status.error ?? '分析失败')
       }
       await new Promise((r) => setTimeout(r, 500))

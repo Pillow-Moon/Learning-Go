@@ -1,0 +1,24 @@
+{
+  "_comment": "GTP 坐标转换共享输入矩阵（单一来源，禁止各自复制）：前端 src/lib/gtpCoords.test.ts 与后端 tests/test_coordinates.py 同读此文件。vertex 为内部 [x, y]（y=0 在棋盘顶部），gtp 为 GTP 坐标（列字母跳过 I，行号从底部起）。",
+  "cases": [
+    { "boardSize": 19, "vertex": [0, 0], "gtp": "A19" },
+    { "boardSize": 19, "vertex": [18, 0], "gtp": "T19" },
+    { "boardSize": 19, "vertex": [0, 18], "gtp": "A1" },
+    { "boardSize": 19, "vertex": [18, 18], "gtp": "T1" },
+    { "boardSize": 19, "vertex": [9, 9], "gtp": "K10" },
+    { "boardSize": 19, "vertex": [3, 3], "gtp": "D16" },
+    { "boardSize": 19, "vertex": [15, 3], "gtp": "Q16" },
+    { "boardSize": 19, "vertex": [15, 15], "gtp": "Q4" },
+    { "boardSize": 19, "vertex": [7, 8], "gtp": "H11" },
+    { "boardSize": 19, "vertex": [8, 8], "gtp": "J11" },
+    { "boardSize": 19, "vertex": [9, 18], "gtp": "K1" },
+    { "boardSize": 13, "vertex": [0, 0], "gtp": "A13" },
+    { "boardSize": 13, "vertex": [12, 12], "gtp": "N1" },
+    { "boardSize": 13, "vertex": [6, 6], "gtp": "G7" },
+    { "boardSize": 13, "vertex": [8, 0], "gtp": "J13" },
+    { "boardSize": 9, "vertex": [0, 0], "gtp": "A9" },
+    { "boardSize": 9, "vertex": [8, 8], "gtp": "J1" },
+    { "boardSize": 9, "vertex": [4, 4], "gtp": "E5" },
+    { "boardSize": 9, "vertex": [8, 0], "gtp": "J9" }
+  ]
+}

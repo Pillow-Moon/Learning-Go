@@ -20,25 +20,12 @@
  */
 import type { AnalysisResult, Candidate, EngineInfo, GoEngine } from './types'
 import { useSettingsStore, type WasmModelId } from '../stores/settingsStore'
+import { gtpToVertex, vertexToGtp } from '../lib/gtpCoords'
+import { newCorrelationId } from '../lib/correlationId'
 
 /** 各模型对应的文件名（同源 /wasm/ 目录；模型收敛后仅 b6c96） */
 const MODEL_FILES: Record<WasmModelId, string> = {
   b6c96: 'b6c96.bin.gz',
-}
-
-// ─── GTP 坐标转换 ───────────────────────────────────────────────
-
-/** GTP 坐标（如 "Q16"）转内部 [x, y] 坐标。注意 GTP 跳过 I 列。 */
-function gtpToVertex(
-  coord: string,
-  boardSize: number,
-): [number, number] | null {
-  if (!coord || coord === 'pass' || coord === 'resign') return null
-  const colChar = coord.charCodeAt(0)
-  let x = colChar - 65 // 'A' = 0
-  if (colChar > 73) x-- // 跳过 'I'
-  const y = boardSize - parseInt(coord.slice(1), 10)
-  return [x, y]
 }
 
 // ─── 下载辅助 ────────────────────────────────────────────────────
@@ -266,6 +253,7 @@ export class WasmEngine implements GoEngine {
       /** 搜索时间上限（秒，KataGo maxTime，与 maxVisits 先到者停） */
       maxTime?: number
       moves: [string, [number, number] | null][]
+      correlationId?: string
     },
     onSnapshot?: (result: AnalysisResult) => void,
   ): Promise<AnalysisResult> {
@@ -284,25 +272,24 @@ export class WasmEngine implements GoEngine {
       maxTime?: number
       moves: [string, [number, number] | null][]
       initialStones?: { B?: [number, number][]; W?: [number, number][] }
+      correlationId?: string
     },
     onSnapshot: ((result: AnalysisResult) => void) | undefined,
     urgent: boolean,
   ): Promise<AnalysisResult> {
     this.ensureReady()
     const id = String(++this.requestId)
-
-    /** 内部坐标 → GTP 坐标（大写，跳过 I 列，行号从底部起） */
-    const toGtp = ([x, y]: [number, number], bs: number): string => {
-      const col = x >= 8 ? x + 1 : x // 跳过 I
-      const row = bs - y
-      return `${String.fromCharCode(65 + col)}${row}`
-    }
+    // Cross-stack correlation id: console is the only sink on this path.
+    const correlationId = query.correlationId ?? newCorrelationId()
+    console.log(
+      `[Analysis] start id=${correlationId} source=browser wasmId=${id} moves=${query.moves.length} board=${query.boardSize}`,
+    )
 
     const wasmQuery = {
       id,
       moves: query.moves.map(([color, vertex]) =>
         vertex
-          ? [color, toGtp(vertex, query.boardSize)]
+          ? [color, vertexToGtp(vertex, query.boardSize)]
           : [color, 'pass'], // KataGo 分析协议：pass 用 "pass" 字符串（空串解析失败）
       ),
       // 初始摆子（KataGo initialStones 协议：[['b','Q16'],['w','D4'],...] 数组对）
@@ -310,7 +297,7 @@ export class WasmEngine implements GoEngine {
         ? {
             initialStones: Object.entries(query.initialStones)
               .flatMap(([color, vs]) =>
-                (vs ?? []).map((v) => [color.toLowerCase(), toGtp(v, query.boardSize)]),
+                (vs ?? []).map((v) => [color.toLowerCase(), vertexToGtp(v, query.boardSize)]),
               ),
           }
         : {}),
