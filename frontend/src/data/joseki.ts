@@ -21,6 +21,8 @@ export interface JosekiLine {
   note?: string
   /** 置信度：high=常见标准型；medium=常见但存在多种变体；unverified=待复核 */
   confidence: 'high' | 'medium' | 'unverified'
+  /** 使用率（可选）：暂无数据源时为 undefined，排序回退原始顺序；后续数据补充后自动生效 */
+  frequency?: number
 }
 
 /** 一个定式（可含多个变化线） */

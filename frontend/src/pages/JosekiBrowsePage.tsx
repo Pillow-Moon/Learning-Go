@@ -36,6 +36,8 @@ export default function JosekiBrowsePage() {
   const [clusterKey, setClusterKey] = useState<string | null>(null)
   const [lineIdx, setLineIdx] = useState(0)
   const [current, setCurrent] = useState(0)
+  /** 定式排序方式：原始顺序 / 按使用率（无使用率数据时回退原始顺序） */
+  const [sortMode, setSortMode] = useState<'original' | 'usage'>('original')
 
   const family = JOSEKI_KOGO[familyIdx]
 
@@ -57,8 +59,22 @@ export default function JosekiBrowsePage() {
     setCurrent(0)
   }, [familyIdx])
 
+  // 定式簇列表（原始顺序 / 按使用率：簇内线 frequency 之和降序；无数据回退原始顺序）
+  const sortedClusters = useMemo(() => {
+    if (sortMode !== 'usage') return clusters
+    const hasUsage = clusters.some((c) =>
+      c.lines.some((l) => typeof l.frequency === 'number'),
+    )
+    if (!hasUsage) return clusters
+    return [...clusters].sort(
+      (a, b) =>
+        b.lines.reduce((s, l) => s + (l.frequency ?? 0), 0) -
+        a.lines.reduce((s, l) => s + (l.frequency ?? 0), 0),
+    )
+  }, [clusters, sortMode])
+  const showClusters = sortedClusters
   const cluster = clusterKey
-    ? clusters.find((c) => c.key === clusterKey) ?? null
+    ? sortedClusters.find((c) => c.key === clusterKey) ?? null
     : null
   const line: JosekiLine | null =
     cluster && cluster.lines[lineIdx] ? cluster.lines[lineIdx] : null
@@ -115,10 +131,8 @@ export default function JosekiBrowsePage() {
                   className={`v2-tree-row ${i === familyIdx ? 'current' : ''}`}
                   onClick={() => pickFamily(i)}
                 >
-                  <span className="v2-tree-tag main">{f.name}</span>
-                  <span style={{ fontSize: 12, color: 'var(--text-muted)' }}>
-                    {f.lines.length} 线
-                  </span>
+                  <span className="joseki-family-name">{f.name}</span>
+                  <span className="joseki-family-count">{f.lines.length} 线</span>
                 </div>
               ))}
             </div>
@@ -129,21 +143,35 @@ export default function JosekiBrowsePage() {
               定式
               <span className="hint-sm">{family.name}</span>
             </div>
+            {/* 排序方式：原始顺序 / 按使用率（无使用率数据时回退原始顺序） */}
+            <div className="v2-sort-row">
+              <button
+                className={`btn sm ${sortMode === 'original' ? 'primary' : ''}`}
+                onClick={() => setSortMode('original')}
+              >
+                原始顺序
+              </button>
+              <button
+                className={`btn sm ${sortMode === 'usage' ? 'primary' : ''}`}
+                onClick={() => setSortMode('usage')}
+              >
+                按使用率
+              </button>
+            </div>
+            {sortMode === 'usage' && !showClusters.some((c) => c.lines.some((l) => typeof l.frequency === 'number')) && (
+              <p className="hint-sm" style={{ padding: '4px 16px 0' }}>
+                暂无使用率数据，保持原始顺序
+              </p>
+            )}
             <div className="v2-tree">
-              {clusters.length === 0 && <div className="v2-empty">暂无数据</div>}
-              {clusters.slice(0, 200).map((c) => (
+              {showClusters.length === 0 && <div className="v2-empty">暂无数据</div>}
+              {showClusters.map((c) => (
                 <div
                   key={c.key}
                   className={`v2-tree-row ${clusterKey === c.key ? 'current' : ''}`}
                   onClick={() => pickCluster(c.key)}
                   title={c.title}
                 >
-                  <span
-                    className="v2-tree-tag"
-                    style={{ background: 'var(--text-muted)', maxWidth: 90, overflow: 'hidden', textOverflow: 'ellipsis' }}
-                  >
-                    {c.lines.length} 变
-                  </span>
                   <span
                     style={{
                       overflow: 'hidden',
@@ -154,11 +182,14 @@ export default function JosekiBrowsePage() {
                   >
                     {c.title.replace(`${family.name} · `, '')}
                   </span>
+                  <span
+                    className="joseki-family-count"
+                    style={{ fontSize: 11 }}
+                  >
+                    {c.lines.length} 变
+                  </span>
                 </div>
               ))}
-              {clusters.length > 200 && (
-                <div className="v2-empty">仅显示前 200 个定式</div>
-              )}
             </div>
           </div>
         </aside>
@@ -175,6 +206,7 @@ export default function JosekiBrowsePage() {
               candidates={null}
               ownership={null}
               highlights={null}
+              onWheelStep={(d) => setCurrent((c) => Math.min(total, Math.max(0, c + d)))}
             />
           </div>
 
@@ -255,7 +287,7 @@ export default function JosekiBrowsePage() {
                         onClick={() => setLineIdx(i)}
                         title={l.name}
                       >
-                        <span className="v2-tree-tag main">{i + 1}</span>
+                        <span className="joseki-line-no">{i + 1}</span>
                         <span
                           style={{
                             overflow: 'hidden',

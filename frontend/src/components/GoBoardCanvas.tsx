@@ -37,6 +37,8 @@ interface Props {
   /** 变化图第一手颜色（调用方传当前执子方；缺省时序列按黑先交替） */
   highlightFirstColor?: Player
   onPlay?: (vertex: Vertex) => void
+  /** 滚轮翻手：deltaY>0 下一步(dir=1)、<0 上一步(dir=-1)；传入后棋盘区域滚轮拦截页面滚动 */
+  onWheelStep?: (dir: -1 | 1) => void
 }
 
 export default function GoBoardCanvas({
@@ -52,6 +54,7 @@ export default function GoBoardCanvas({
   highlights,
   highlightFirstColor = 1,
   onPlay,
+  onWheelStep,
 }: Props) {
   const canvasRef = useRef<HTMLCanvasElement>(null)
   const containerRef = useRef<HTMLDivElement>(null)
@@ -93,6 +96,25 @@ export default function GoBoardCanvas({
     if (Math.hypot(px - cx, py - cy) > cellSize * 0.48) return null
     return [x, y]
   }
+
+  // 滚轮翻手：原生监听（React onWheel 为 passive，无法 preventDefault），
+  // 100ms 节流防连滚；仅当回调存在时挂载
+  useEffect(() => {
+    if (!onWheelStep) return
+    const canvas = canvasRef.current
+    if (!canvas) return
+    let last = 0
+    const handler = (e: WheelEvent) => {
+      if (Math.abs(e.deltaY) < 1) return
+      const now = Date.now()
+      if (now - last < 100) return
+      last = now
+      e.preventDefault()
+      onWheelStep(e.deltaY > 0 ? 1 : -1)
+    }
+    canvas.addEventListener('wheel', handler, { passive: false })
+    return () => canvas.removeEventListener('wheel', handler)
+  }, [onWheelStep])
 
   useEffect(() => {
     const canvas = canvasRef.current
@@ -188,7 +210,7 @@ export default function GoBoardCanvas({
 
     // 变化图高亮（半透明黑白棋 + 顺序编号）
     if (highlights && highlights.length > 0) {
-      drawHighlights(ctx, highlights, toPixel, cellSize, theme, highlightFirstColor)
+      drawHighlights(ctx, highlights, toPixel, cellSize, highlightFirstColor)
     }
 
     // 最后一手标记
@@ -371,7 +393,6 @@ function drawHighlights(
   highlights: Vertex[],
   toPixel: (v: Vertex) => [number, number],
   cellSize: number,
-  theme: BoardTheme,
   firstColor: Player,
 ) {
   ctx.save()
@@ -383,13 +404,14 @@ function drawHighlights(
     const radius = cellSize * 0.46
 
     // 半透明棋子（纯色圆 + 同色描边；不调 drawStone，避免阴影叠加导致视觉杂乱）
-    ctx.globalAlpha = 0.55
+    ctx.globalAlpha = 0.75
     ctx.fillStyle = color === 1 ? '#1a1a1a' : '#f5f5f5'
     ctx.beginPath()
     ctx.arc(px, py, radius, 0, Math.PI * 2)
     ctx.fill()
-    ctx.lineWidth = Math.max(1, cellSize * 0.05)
-    ctx.strokeStyle = theme.line
+    // 深灰描边：白棋在浅色棋盘上以深边可辨（星阵/OGS 变化图同款处理）
+    ctx.lineWidth = Math.max(1.2, cellSize * 0.07)
+    ctx.strokeStyle = 'rgba(0,0,0,0.35)'
     ctx.stroke()
 
     // 顺序编号（黑棋上白字、白棋上黑字）
@@ -401,7 +423,10 @@ function drawHighlights(
   ctx.restore()
 }
 
-/** 绘制分析候选选点标记（最佳着用三角，其余用圆点 + 胜率） */
+/**
+ * 绘制分析候选选点标记（星阵风格：1选金色三角，2选绿色，3选蓝色，4+ 灰色；
+ * 计算量 < 一选 20% 时降级为灰色小点且不显示胜率——星阵"计算量太低不显示为高亮"）。
+ */
 function drawCandidates(
   ctx: CanvasRenderingContext2D,
   candidates: Candidate[],
@@ -414,6 +439,7 @@ function drawCandidates(
   const top = candidates
     .filter((c) => c.move && board.get(c.move) === 0)
     .slice(0, MAX_CANDIDATES)
+  const topVisits = top[0]?.visits ?? null
 
   ctx.save()
   ctx.textAlign = 'center'
@@ -424,26 +450,50 @@ function drawCandidates(
     const [px, py] = toPixel(c.move)
     const winrate = c.winrate ?? 0
     const pct = Math.round(winrate * 100)
+    // 低计算量弱化：visits 不足一选 20% 或缺失时降级（一选自身不降级）
+    const lowVisits =
+      idx > 0 &&
+      topVisits != null &&
+      (c.visits == null || c.visits < topVisits * 0.2)
 
     if (idx === 0) {
-      // 最佳着：红色三角
+      // 1选：金色三角
       const r = cellSize * 0.28
-      ctx.fillStyle = dark ? 'rgba(255,120,110,0.95)' : 'rgba(200,40,40,0.9)'
+      ctx.fillStyle = dark ? '#e8b84b' : '#d4a017'
       ctx.beginPath()
       ctx.moveTo(px, py - r)
       ctx.lineTo(px - r * 0.9, py + r * 0.7)
       ctx.lineTo(px + r * 0.9, py + r * 0.7)
       ctx.closePath()
       ctx.fill()
-    } else {
-      // 次选：蓝色圆点
-      ctx.fillStyle = dark ? 'rgba(110,170,255,0.85)' : 'rgba(30,90,180,0.75)'
+    } else if (lowVisits) {
+      // 低计算量：灰色小点（不显示胜率标签）
+      ctx.fillStyle = 'rgba(120,120,120,0.7)'
+      ctx.beginPath()
+      ctx.arc(px, py, cellSize * 0.14, 0, Math.PI * 2)
+      ctx.fill()
+      return
+    } else if (idx === 1) {
+      // 2选：绿色圆点
+      ctx.fillStyle = dark ? '#4caf7d' : '#2e8b57'
       ctx.beginPath()
       ctx.arc(px, py, cellSize * 0.16, 0, Math.PI * 2)
       ctx.fill()
+    } else if (idx === 2) {
+      // 3选：蓝色圆点
+      ctx.fillStyle = dark ? '#6a9fd8' : '#3a6ea5'
+      ctx.beginPath()
+      ctx.arc(px, py, cellSize * 0.16, 0, Math.PI * 2)
+      ctx.fill()
+    } else {
+      // 4+：灰色小点
+      ctx.fillStyle = 'rgba(120,120,120,0.7)'
+      ctx.beginPath()
+      ctx.arc(px, py, cellSize * 0.14, 0, Math.PI * 2)
+      ctx.fill()
     }
 
-    // 胜率标签
+    // 胜率标签（低计算量已提前 return）
     ctx.fillStyle = dark ? '#f0f0f0' : '#1a1a1a'
     ctx.font = `bold ${Math.max(9, cellSize * 0.26)}px sans-serif`
     ctx.fillText(`${pct}%`, px, py - cellSize * 0.42)

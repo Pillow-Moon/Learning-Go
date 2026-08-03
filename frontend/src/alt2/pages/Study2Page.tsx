@@ -16,7 +16,7 @@ import { useAnalysisStore } from '../../stores/analysisStore'
 import { buildEngineMoves } from '../../lib/boardUtils'
 import { generateLocalCommentary } from '../../lib/localCommentary'
 import { getGameById, listGames, saveGame, type GameRecord } from '../../lib/db'
-import { parseSgfGame, sgfResultToText } from '../../lib/sgf'
+import { parseSgfGame, sgfResultToText, movesToSgf } from '../../lib/sgf'
 import type { BoardSize, Move, Player, Vertex } from '../../lib/types'
 
 function coordLabel(x: number, y: number, size: number): string {
@@ -66,6 +66,19 @@ export default function Study2Page() {
   const [highlightPv, setHighlightPv] = useState<Vertex[] | null>(null)
   /** 「试下」：固定当前变化图快照，跟随摆子时保持显示、暂停自动分析 */
   const [tryPv, setTryPv] = useState<Vertex[] | null>(null)
+  /** 「试下」临时着法（不入正式谱，退出试下后复原棋盘） */
+  const [tryMoves, setTryMoves] = useState<Move[]>([])
+  /** 变化图显示开关（默认开，保持现有交互；试下时强制显示） */
+  const [variationOn, setVariationOn] = useState(true)
+  /** 「由此续下」前的原始棋谱快照（供「回到原谱」恢复） */
+  const [originalSnapshot, setOriginalSnapshot] = useState<{
+    boardSize: BoardSize
+    komi: number
+    moves: Move[]
+    name: string | null
+    result: string | null
+    moveIndex: number
+  } | null>(null)
   const [history, setHistory] = useState<GameRecord[]>([])
   const [importError, setImportError] = useState<string | null>(null)
   const [msg, setMsg] = useState<string | null>(null)
@@ -131,7 +144,7 @@ export default function Study2Page() {
         moves: buildEngineMoves(moves.slice(0, moveIndex), review.handicapStones),
         boardSize,
         komi,
-        maxVisits: 50,
+        maxVisits: 200,
       })
     }, 150)
     return () => window.clearTimeout(t)
@@ -143,7 +156,7 @@ export default function Study2Page() {
     window.setTimeout(() => setMsg(null), 2600)
   }
 
-  /** 载入棋谱（历史 / SGF / 空盘） */
+  /** 载入棋谱（历史 / SGF / 空盘）：换谱时清空试下与「回到原谱」快照 */
   const loadGame = (
     newMoves: Move[],
     size: BoardSize,
@@ -151,6 +164,9 @@ export default function Study2Page() {
     name?: string | null,
     result?: string | null,
   ) => {
+    setTryPv(null)
+    setTryMoves([])
+    setOriginalSnapshot(null)
     review.loadGame({
       boardSize: size,
       komi: komiVal,
@@ -220,6 +236,93 @@ export default function Study2Page() {
     reader.readAsText(file)
   }
 
+  /** 由此续下：截断谱面到当前手，此后摆子作为新棋谱（可另存 SGF）；保存原始快照供「回到原谱」 */
+  const handleContinueHere = () => {
+    if (moveIndex <= 0 || moveIndex >= total) return
+    if (!window.confirm(`将丢弃第 ${moveIndex} 手之后的着法，从此继续摆子？`)) return
+    setOriginalSnapshot({
+      boardSize,
+      komi,
+      moves,
+      name: review.name,
+      result: review.result,
+      moveIndex,
+    })
+    const cut = moves.slice(0, moveIndex)
+    review.loadGame({
+      boardSize,
+      komi,
+      moves: cut,
+      name: review.name,
+      result: review.result,
+    })
+    review.gotoMove(cut.length)
+    flash(`已截断至第 ${moveIndex} 手，可续下；摆完后可用「保存 SGF」另存新棋谱`)
+  }
+
+  /** 回到原谱：恢复「由此续下」前的完整棋谱与查看位置 */
+  const handleRestoreOriginal = () => {
+    if (!originalSnapshot) return
+    const snap = originalSnapshot
+    review.loadGame({
+      boardSize: snap.boardSize,
+      komi: snap.komi,
+      moves: snap.moves,
+      name: snap.name,
+      result: snap.result,
+    })
+    review.gotoMove(snap.moveIndex)
+    setOriginalSnapshot(null)
+    flash('已恢复续下前的原始棋谱')
+  }
+
+  /** 保存为 SGF：命名（可重命名）→ 入库历史棋谱 + 下载 .sgf 文件 */
+  const handleSaveSgf = () => {
+    if (moves.length === 0) return
+    const now = new Date()
+    const pad = (n: number) => String(n).padStart(2, '0')
+    const defaultName =
+      `研究摆盘 ${now.getFullYear()}-${pad(now.getMonth() + 1)}-${pad(now.getDate())} ${pad(now.getHours())}:${pad(now.getMinutes())}`
+    const input = window.prompt('保存为 SGF（可重命名）：', review.name ?? defaultName)
+    if (input == null) return
+    const name = input.trim() || defaultName
+    const sgfText = movesToSgf({
+      boardSize,
+      komi,
+      moves,
+      gameName: name,
+      result: review.result,
+    })
+    // 入库（供「历史棋谱」载入继续复盘 / 诊断批量分析）
+    saveGame({
+      boardSize,
+      komi,
+      mode: 'study',
+      result: review.result ?? '',
+      sgf: sgfText,
+      createdAt: '',
+      moves: moves.map((m) => ({
+        n: m.n,
+        color: m.color,
+        vertex: m.vertex,
+        pass: m.pass,
+      })),
+    })
+      .then(() => listGames().then(setHistory))
+      .catch(() => {
+        /* 入库失败不影响下载 */
+      })
+    // 下载 .sgf 文件
+    const blob = new Blob([sgfText], { type: 'application/x-go-sgf' })
+    const url = URL.createObjectURL(blob)
+    const a = document.createElement('a')
+    a.href = url
+    a.download = `${name}.sgf`
+    a.click()
+    URL.revokeObjectURL(url)
+    flash(`已保存为 SGF：${name}`)
+  }
+
   /** 整盘逐手分析（复盘能力）：运行中停止，已分析则继续/重跑 */
   const handleAnalyzeAll = () => {
     if (analysisStatus === 'running') {
@@ -231,15 +334,24 @@ export default function Study2Page() {
     }
   }
 
-  // 当前显示局面
+  // 当前显示局面（试下中：正式谱 + 试下临时着法叠加）
   const board = useMemo(
-    () => buildBoardFromMoves(boardSize, moves.slice(0, moveIndex), review.handicapStones),
-    [boardSize, moves, moveIndex, review.handicapStones],
+    () =>
+      buildBoardFromMoves(
+        boardSize,
+        [...moves.slice(0, moveIndex), ...tryMoves],
+        review.handicapStones,
+      ),
+    [boardSize, moves, moveIndex, tryMoves, review.handicapStones],
   )
   const currentMove: Move | null = moveIndex > 0 ? moves[moveIndex - 1] : null
-  const curPlayer: Player = moveIndex % 2 === 0 ? 1 : -1
-  const lastVertex: Vertex | null =
-    currentMove && !currentMove.pass ? currentMove.vertex : null
+  const curPlayer: Player = (moveIndex + tryMoves.length) % 2 === 0 ? 1 : -1
+  const tryLast: Move | null = tryMoves.length > 0 ? tryMoves[tryMoves.length - 1] : null
+  const lastVertex: Vertex | null = tryLast
+    ? tryLast.vertex
+    : currentMove && !currentMove.pass
+      ? currentMove.vertex
+      : null
 
   // 候选点（过期保护：仅当分析对应当前手数或分析中才显示）
   const showCandidates =
@@ -305,7 +417,7 @@ export default function Study2Page() {
               棋谱
               <span className="hint-sm">{review.name ?? '未载入棋谱'}</span>
             </div>
-            <div className="v2-actions" style={{ gridTemplateColumns: '1fr 1fr' }}>
+            <div className="v2-actions" style={{ gridTemplateColumns: '1fr 1fr 1fr' }}>
               <button
                 className="btn sm"
                 onClick={() => loadGame([], 19, komiOpt, '空盘新局')}
@@ -329,6 +441,14 @@ export default function Study2Page() {
                     e.target.value = ''
                   }}
                 />
+              </button>
+              <button
+                className="btn sm"
+                onClick={handleSaveSgf}
+                disabled={moves.length === 0}
+                title="将当前摆盘保存为 SGF（可命名）"
+              >
+                保存 SGF
               </button>
             </div>
             {importError && <p className="error" style={{ padding: '0 16px 10px' }}>{importError}</p>}
@@ -397,6 +517,25 @@ export default function Study2Page() {
                 显示领地（实地预测）
               </label>
             </div>
+            {/* 由此续下 / 回到原谱 */}
+            <div className="v2-actions" style={{ gridTemplateColumns: '1fr 1fr' }}>
+              <button
+                className="btn sm"
+                onClick={handleContinueHere}
+                disabled={moveIndex <= 0 || moveIndex >= total}
+                title="截断谱面到当前手，从此继续摆子（可另存新 SGF）"
+              >
+                由此续下
+              </button>
+              <button
+                className="btn sm"
+                onClick={handleRestoreOriginal}
+                disabled={!originalSnapshot}
+                title="恢复续下前的原始棋谱"
+              >
+                回到原谱
+              </button>
+            </div>
             {/* 整盘分析（复盘能力） */}
             <div className="v2-actions" style={{ gridTemplateColumns: '1fr' }}>
               <button
@@ -446,13 +585,23 @@ export default function Study2Page() {
               boardSize={boardSize}
               currentPlayer={curPlayer}
               lastMove={lastVertex}
-              interactive={moveIndex === total}
+              interactive={moveIndex === total || tryPv != null}
               candidates={tab === 'cand' ? showCandidates : null}
               ownership={territoryOn ? ownership : null}
-              highlights={showHighlights}
+              highlights={tryPv || variationOn ? showHighlights : null}
               highlightFirstColor={curPlayer}
+              onWheelStep={(d) => review.stepMove(d)}
               onPlay={(v) => {
-                if (review.appendMove(v)) flash('已摆子')
+                if (tryPv) {
+                  // 试下：临时着法，不入正式谱（退出试下后棋盘复原）
+                  const color: Player = (moveIndex + tryMoves.length) % 2 === 0 ? 1 : -1
+                  setTryMoves((m) => [
+                    ...m,
+                    { n: moveIndex + m.length + 1, color, vertex: v, pass: false },
+                  ])
+                } else if (review.appendMove(v)) {
+                  flash('已摆子')
+                }
               }}
             />
             {msg && <div className="v2-board-msg">{msg}</div>}
@@ -498,6 +647,11 @@ export default function Study2Page() {
               目差 <b>{leadText(rootScoreLead)}</b>
             </span>
             {analyzing && <span className="v2-stat"><b style={{ color: 'var(--primary-dark)' }}>分析中…</b></span>}
+            {tryPv && (
+              <span className="v2-stat">
+                试下 <b>{tryMoves.length}</b> 手
+              </span>
+            )}
           </div>
         </div>
 
@@ -528,6 +682,7 @@ export default function Study2Page() {
                           className="btn sm"
                           onClick={() => {
                             setTryPv(null)
+                            setTryMoves([])
                             flash('已退出试下，恢复自动分析')
                           }}
                         >
@@ -535,17 +690,28 @@ export default function Study2Page() {
                         </button>
                       </>
                     ) : (
-                      <button
-                        className="btn sm primary"
-                        onClick={() => {
-                          const pv = highlightPv && highlightPv.length > 0 ? highlightPv : selectedPv
-                          if (pv.length === 0) return
-                          setTryPv(pv.slice(0, varLen))
-                          flash('试下：跟随变化图摆子，变化图保持显示')
-                        }}
-                      >
-                        试下此变化图
-                      </button>
+                      <>
+                        {/* 变化图显示开关（试下时强制显示，不受此开关影响） */}
+                        <label className="v2-opt-check" style={{ marginRight: 'auto' }}>
+                          <input
+                            type="checkbox"
+                            checked={variationOn}
+                            onChange={(e) => setVariationOn(e.target.checked)}
+                          />
+                          变化图
+                        </label>
+                        <button
+                          className="btn sm primary"
+                          onClick={() => {
+                            const pv = highlightPv && highlightPv.length > 0 ? highlightPv : selectedPv
+                            if (pv.length === 0) return
+                            setTryPv(pv.slice(0, varLen))
+                            flash('试下：跟随变化图摆子，变化图保持显示')
+                          }}
+                        >
+                          试下此变化图
+                        </button>
+                      </>
                     )}
                   </div>
                 )}
@@ -553,10 +719,11 @@ export default function Study2Page() {
                   <table className="recommend-table v2-cand-table">
                     <thead>
                       <tr>
+                        <th>排名</th>
                         <th>落点</th>
-                        <th title="AI 选点概率（policy），搜索收敛后与胜率排序一致">推荐度</th>
                         <th title="落子后黑方目差（正=黑领先）">目差</th>
                         <th>胜率</th>
+                        <th title="该选点的搜索量，过低时评估可信度低">计算量</th>
                       </tr>
                     </thead>
                     <tbody>
@@ -568,17 +735,23 @@ export default function Study2Page() {
                             setSelectedCand(i)
                             setHighlightPv(null)
                             setTryPv(null)
+                            setTryMoves([])
                             if (c.pv.length > 0) flash('变化图：已显示 AI 构想')
                           }}
                         >
                           <td>
-                            {i + 1}. {c.move ? coordLabel(c.move[0], c.move[1], boardSize) : 'pass'}
+                            {i === 0 ? '1选' : i === 1 ? '2选' : i === 2 ? '3选' : `${i + 1}选`}
                           </td>
-                          <td>{c.prior != null ? `${Math.round(c.prior * 100)}%` : '—'}</td>
+                          <td>
+                            {c.move ? coordLabel(c.move[0], c.move[1], boardSize) : 'pass'}
+                          </td>
                           <td className={c.scoreLead != null && c.scoreLead >= 0 ? 'lead-pos' : 'lead-neg'}>
                             {c.scoreLead != null ? `${c.scoreLead >= 0 ? '+' : ''}${c.scoreLead.toFixed(1)}` : '—'}
                           </td>
                           <td>{c.winrate != null ? `${(c.winrate * 100).toFixed(1)}%` : '—'}</td>
+                          <td className="visits">
+                            {c.visits != null ? `${c.visits} 次` : '—'}
+                          </td>
                         </tr>
                       ))}
                     </tbody>
@@ -592,7 +765,10 @@ export default function Study2Page() {
                         : '暂无候选点'}
                   </div>
                 )}
-                <p className="hint-sm">点击候选行查看变化图；棋盘显示到最后一手时可继续摆子</p>
+                <p className="hint-sm">
+                  按 AI 推荐顺序排列：1选为最优，2选/3选次之；胜率/目差为落子后黑方视角评估；
+                  计算量为该选点的搜索量，过低时评估可信度低。点击候选行查看变化图；棋盘显示到最后一手时可继续摆子。
+                </p>
               </div>
             )}
 

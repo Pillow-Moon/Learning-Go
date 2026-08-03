@@ -762,6 +762,49 @@
   font-weight: 600;
 }
 
+/* 候选点表格：计算量列（窄列、弱化） */
+.v2-cand-table .visits {
+  color: var(--text-muted);
+  font-size: 12px;
+  white-space: nowrap;
+}
+
+/* 定式页：家族/变化列表顶格加粗（去掉棕黄 tag 背景） */
+.joseki-family-name {
+  font-weight: 700;
+  font-size: 13.5px;
+  color: var(--text);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.joseki-family-count {
+  margin-left: auto;
+  font-size: 12px;
+  font-weight: 400;
+  color: var(--text-muted);
+  flex-shrink: 0;
+}
+
+.joseki-line-no {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text-muted);
+  flex-shrink: 0;
+}
+
+/* 定式页排序切换 */
+.v2-sort-row {
+  display: flex;
+  gap: 8px;
+  padding: 8px 16px 2px;
+}
+
+.v2-sort-row .btn {
+  flex: 1;
+}
+
 /* ---------- 空态 ---------- */
 .v2-empty {
   padding: 26px 16px;
