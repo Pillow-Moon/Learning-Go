@@ -13,7 +13,6 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 // 页面组件与引擎管理器均 mock：本测试只关心顶栏主题按钮
 vi.mock('./alt2/pages/Home2Page', () => ({ default: () => null }))
 vi.mock('./alt2/pages/Study2Page', () => ({ default: () => null }))
-vi.mock('./pages/ReviewPage', () => ({ default: () => null }))
 vi.mock('./pages/JosekiBrowsePage', () => ({ default: () => null }))
 vi.mock('./pages/SettingsPage', () => ({ default: () => null }))
 vi.mock('./engines/manager', () => ({ autoInitEngines: vi.fn(async () => {}) }))

@@ -1234,6 +1234,10 @@ button:disabled {
 
 .review-nav-buttons .btn {
   flex: 1;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
 }
 
 .review-slider {

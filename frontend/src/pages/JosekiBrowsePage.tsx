@@ -6,6 +6,7 @@
  */
 import { useEffect, useMemo, useState } from 'react'
 import GoBoardCanvas from '../components/GoBoardCanvas'
+import { FirstIcon, PrevIcon, NextIcon, LastIcon } from '../components/NavIcons'
 import { JOSEKI_KOGO } from '../data/josekiKogo'
 import { buildBoardFromMoves } from '../stores/reviewStore'
 import type { JosekiLine } from '../data/joseki'
@@ -83,8 +84,9 @@ export default function JosekiBrowsePage() {
     () => buildBoardFromMoves(19, moveList.slice(0, current)),
     [moveList, current],
   )
-  const lastVertex: Vertex | null =
-    current > 0 && !moveList[current - 1].pass ? moveList[current - 1].vertex : null
+  // 切换定式/簇时 line 先变而 current 异步重置，moveList 可能暂时短于 current，必须判空
+  const prevMove = current > 0 ? moveList[current - 1] : null
+  const lastVertex: Vertex | null = prevMove && !prevMove.pass ? prevMove.vertex : null
   const curPlayer: Player = current % 2 === 0 ? 1 : -1
 
   const pickFamily = (idx: number) => {
@@ -214,28 +216,28 @@ export default function JosekiBrowsePage() {
               {/* 逐手导航 */}
               <div className="review-nav-buttons">
                 <button className="btn" disabled={current <= 0} onClick={() => setCurrent(0)}>
-                  ⏮ 首
+                  <FirstIcon /> 首
                 </button>
                 <button
                   className="btn"
                   disabled={current <= 0}
                   onClick={() => setCurrent((c) => Math.max(0, c - 1))}
                 >
-                  ◀ 退
+                  <PrevIcon /> 退
                 </button>
                 <button
                   className="btn"
                   disabled={current >= total}
                   onClick={() => setCurrent((c) => Math.min(total, c + 1))}
                 >
-                  进 ▶
+                  进 <NextIcon />
                 </button>
                 <button
                   className="btn"
                   disabled={current >= total}
                   onClick={() => setCurrent(total)}
                 >
-                  尾 ⏭
+                  尾 <LastIcon />
                 </button>
               </div>
 

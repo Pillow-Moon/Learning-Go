@@ -10,6 +10,7 @@ import { useShallow } from 'zustand/react/shallow'
 import ReactMarkdown from 'react-markdown'
 import GoBoardCanvas from '../../components/GoBoardCanvas'
 import WinrateChart from '../../components/WinrateChart'
+import { FirstIcon, PrevIcon, NextIcon, LastIcon } from '../../components/NavIcons'
 import { useReviewStore, buildBoardFromMoves } from '../../stores/reviewStore'
 import { useAnalysisStore } from '../../stores/analysisStore'
 import { buildEngineMoves } from '../../lib/boardUtils'
@@ -63,6 +64,8 @@ export default function Study2Page() {
   const [varLen, setVarLen] = useState(12)
   const [selectedCand, setSelectedCand] = useState(0)
   const [highlightPv, setHighlightPv] = useState<Vertex[] | null>(null)
+  /** 「试下」：固定当前变化图快照，跟随摆子时保持显示、暂停自动分析 */
+  const [tryPv, setTryPv] = useState<Vertex[] | null>(null)
   const [history, setHistory] = useState<GameRecord[]>([])
   const [importError, setImportError] = useState<string | null>(null)
   const [msg, setMsg] = useState<string | null>(null)
@@ -111,16 +114,18 @@ export default function Study2Page() {
   }, [searchParams])
 
   // 手数/棋谱变化：取消进行中的当前局面分析并清空（避免旧分析结果回填到新局面）
+  // 「试下」期间暂停：不停止分析、不清空，变化图保持显示
   useEffect(() => {
+    if (tryPv) return
     stopAnalysis()
     clear()
     setHighlightPv(null)
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [moveIndex, moves])
+  }, [moveIndex, moves, tryPv])
 
-  // 当前局面分析（候选点）
+  // 当前局面分析（候选点）；「试下」期间暂停，退出试下时自动对新局面发起分析
   useEffect(() => {
-    if (moves.length === 0) return
+    if (tryPv || moves.length === 0) return
     const t = window.setTimeout(() => {
       void analyze({
         moves: buildEngineMoves(moves.slice(0, moveIndex), review.handicapStones),
@@ -131,7 +136,7 @@ export default function Study2Page() {
     }, 150)
     return () => window.clearTimeout(t)
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [moveIndex])
+  }, [moveIndex, moves, tryPv])
 
   const flash = (text: string) => {
     setMsg(text)
@@ -248,12 +253,15 @@ export default function Study2Page() {
         : [],
     [candidates, selectedCand, varLen],
   )
+  // 变化图高亮（优先级：试下快照 > 点击候选行的高亮 > 当前选中候选的 pv）
   const showHighlights =
-    highlightPv && highlightPv.length > 0
-      ? highlightPv.slice(0, varLen)
-      : selectedPv.length > 0
-        ? selectedPv
-        : null
+    tryPv && tryPv.length > 0
+      ? tryPv
+      : highlightPv && highlightPv.length > 0
+        ? highlightPv.slice(0, varLen)
+        : selectedPv.length > 0
+          ? selectedPv
+          : null
 
   // 关键点列表（整盘分析结果，倒序显示）
   const issues = useMemo(
@@ -454,16 +462,16 @@ export default function Study2Page() {
             <div className="v2-panel-body" style={{ padding: 12 }}>
               <div className="review-nav-buttons">
                 <button className="btn" disabled={moveIndex <= 0} onClick={() => review.gotoMove(0)}>
-                  ⏮ 首
+                  <FirstIcon /> 首
                 </button>
                 <button className="btn" disabled={moveIndex <= 0} onClick={() => review.stepMove(-1)}>
-                  ◀ 退
+                  <PrevIcon /> 退
                 </button>
                 <button className="btn" disabled={moveIndex >= total} onClick={() => review.stepMove(1)}>
-                  进 ▶
+                  进 <NextIcon />
                 </button>
                 <button className="btn" disabled={moveIndex >= total} onClick={() => review.gotoMove(total)}>
-                  尾 ⏭
+                  尾 <LastIcon />
                 </button>
               </div>
             </div>
@@ -510,6 +518,37 @@ export default function Study2Page() {
 
             {tab === 'cand' && (
               <div className="controls">
+                {/* 变化图「试下」工具条：试下中也能随时退出（局面过期候选表隐藏时仍可见） */}
+                {(selectedPv.length > 0 || (highlightPv && highlightPv.length > 0) || tryPv) && (
+                  <div className="pv-try-bar">
+                    {tryPv ? (
+                      <>
+                        <span className="pv-try-status">试下中 · 研究暂停</span>
+                        <button
+                          className="btn sm"
+                          onClick={() => {
+                            setTryPv(null)
+                            flash('已退出试下，恢复自动分析')
+                          }}
+                        >
+                          退出试下
+                        </button>
+                      </>
+                    ) : (
+                      <button
+                        className="btn sm primary"
+                        onClick={() => {
+                          const pv = highlightPv && highlightPv.length > 0 ? highlightPv : selectedPv
+                          if (pv.length === 0) return
+                          setTryPv(pv.slice(0, varLen))
+                          flash('试下：跟随变化图摆子，变化图保持显示')
+                        }}
+                      >
+                        试下此变化图
+                      </button>
+                    )}
+                  </div>
+                )}
                 {showCandidates && showCandidates.length > 0 ? (
                   <table className="recommend-table v2-cand-table">
                     <thead>
@@ -528,6 +567,7 @@ export default function Study2Page() {
                           onClick={() => {
                             setSelectedCand(i)
                             setHighlightPv(null)
+                            setTryPv(null)
                             if (c.pv.length > 0) flash('变化图：已显示 AI 构想')
                           }}
                         >
