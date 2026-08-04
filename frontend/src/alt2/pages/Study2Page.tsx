@@ -354,16 +354,24 @@ export default function Study2Page() {
       : null
 
   // 候选点（过期保护：仅当分析对应当前手数或分析中才显示）
-  const showCandidates =
+  const rawCandidates =
     analyzedMoveCount === moveIndex || analyzing ? candidates : null
+  // 按胜率降序展示（稳定排序：同胜率保持引擎序，null 排最后）。
+  // 算力充足时胜率序与引擎序收敛一致；算力不足时按胜率排序更直观（避免胜率最高却排后）。
+  const showCandidates = useMemo(() => {
+    if (!rawCandidates) return null
+    return [...rawCandidates].sort((a, b) => (b.winrate ?? -1) - (a.winrate ?? -1))
+  }, [rawCandidates])
 
   // 变化图高亮（点击候选行时优先）
   const selectedPv = useMemo(
     () =>
-      candidates && candidates[selectedCand] && candidates[selectedCand].pv.length > 0
-        ? candidates[selectedCand].pv.slice(0, varLen)
+      showCandidates &&
+      showCandidates[selectedCand] &&
+      showCandidates[selectedCand].pv.length > 0
+        ? showCandidates[selectedCand].pv.slice(0, varLen)
         : [],
-    [candidates, selectedCand, varLen],
+    [showCandidates, selectedCand, varLen],
   )
   // 变化图高亮（优先级：试下快照 > 点击候选行的高亮 > 当前选中候选的 pv）
   const showHighlights =
@@ -386,21 +394,21 @@ export default function Study2Page() {
   )
   const fullyAnalyzed = points.length > 0 && points.every((p) => p != null)
 
-  // 本地解说（当前局面）
+  // 本地解说（当前局面；用胜率排序后的候选，与表格/棋盘标记一致）
   const commentary = useMemo(() => {
-    if (!candidates || moves.length === 0) return null
+    if (!showCandidates || moves.length === 0) return null
     return generateLocalCommentary({
       boardSize,
       currentPlayer: curPlayer,
       rootWinrate: rootWinrate ?? null,
       rootScoreLead: rootScoreLead ?? null,
-      candidates,
+      candidates: showCandidates,
       regionSummary: '',
       cornerSummary: '',
       josekiSummary: '',
       moveCount: moveIndex,
     })
-  }, [candidates, rootWinrate, rootScoreLead, boardSize, moveIndex, moves.length, curPlayer])
+  }, [showCandidates, rootWinrate, rootScoreLead, boardSize, moveIndex, moves.length, curPlayer])
 
   const blackWinPct =
     rootWinrate != null ? Math.round(rootWinrate * 1000) / 10 : null
@@ -766,7 +774,7 @@ export default function Study2Page() {
                   </div>
                 )}
                 <p className="hint-sm">
-                  按 AI 推荐顺序排列：1选为最优，2选/3选次之；胜率/目差为落子后黑方视角评估；
+                  按胜率排序：1选为当前局面胜率最高的点，目差为辅助参考；
                   计算量为该选点的搜索量，过低时评估可信度低。点击候选行查看变化图；棋盘显示到最后一手时可继续摆子。
                 </p>
               </div>
